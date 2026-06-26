@@ -105,6 +105,20 @@ define(['N/query', 'N/record'], function (query, record) {
     return flat.map(function (r) { return { ns_item_id: String(r.item), qty_on_hand: r.qty }; });
   }
 
+  // item master for the customer's brand (class) — itemid = SKU shown in the portal; the portal
+  // resolves fact rows' internal ids to these. units_per_pallet is a custom item field — pass its
+  // field id in p.upp_field to include it (e.g. 'custitem_units_per_pallet'), else it stays null.
+  function items(p) {
+    var cols = "id, itemid, displayname, salesdescription";
+    if (p.upp_field) cols += ", " + String(p.upp_field).replace(/[^a-z0-9_]/gi, '') + " upp";
+    var flat = runSuiteQL("SELECT " + cols + " FROM item WHERE class=" + Number(p.ns_class_id));
+    return flat.map(function (r) {
+      return { ns_item_id: String(r.id), sku: r.itemid,
+               description: r.displayname || r.salesdescription || null,
+               units_per_pallet: (r.upp === undefined ? null : r.upp) };
+    });
+  }
+
   function sinceExpr(since) {
     // since = 'YYYY-MM-DD' (default 2020-01-01); SuiteQL date literal
     var d = (since && /^\d{4}-\d{2}-\d{2}$/.test(since)) ? since : '2020-01-01';
@@ -134,6 +148,7 @@ define(['N/query', 'N/record'], function (query, record) {
   }
 
   var ACTIONS = {
+    items: items,
     invoices: invoices, purchase_orders: purchaseOrders, item_receipts: itemReceipts,
     item_fulfilments: itemFulfilments, stock_on_hand: stockOnHand,
     create_invoice: createInvoice

@@ -214,7 +214,7 @@ def portal(slug: str, view: str, request: Request, db: Session = Depends(get_db)
     elif view == "stock_on_order":
         ctx["rows"] = service.stock_on_order(db, cust.id, imap)
     elif view == "item_receipts":
-        ctx["rows"] = service.item_receipts(db, cust.id, imap)
+        ctx["rows"] = service.item_receipts(db, cust.id, imap, service.item_names(db, cust.id))
     elif view == "stock_on_hand":
         ctx["rows"] = service.stock_on_hand(db, cust.id, imap, service.item_names(db, cust.id))
     elif view == "fulfilments":

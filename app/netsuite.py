@@ -61,6 +61,18 @@ def _upsert(db: Session, model, ns_field: str, ns_value: str, **cols):
 
 
 # --- ingest functions (one per cache entity) ---------------------------------
+def ingest_items(db: Session, c: Customer, rows: list[dict]) -> int:
+    """The item master. rows: [{ns_item_id, sku, description, units_per_pallet?}].
+    Resolves fact rows' NetSuite internal ids to human SKUs/descriptions in the portal."""
+    for r in rows:
+        per = r.get("units_per_pallet")
+        _upsert(db, Item, "ns_item_id", str(r["ns_item_id"]),
+                customer_id=c.id, sku=r.get("sku") or str(r["ns_item_id"]),
+                description=r.get("description"),
+                units_per_pallet=int(per) if per not in (None, "") else None)
+    return len(rows)
+
+
 def ingest_invoices(db: Session, c: Customer, rows: list[dict]) -> int:
     """rows: [{ns_invoice_id, tranid, trandate, status, total,
               lines:[{charge_type?, description, qty, rate, amount}]}]"""
@@ -173,6 +185,7 @@ def ingest_stock_on_hand(db: Session, c: Customer, rows: list[dict]) -> int:
 
 
 INGEST = {
+    "items": ingest_items,
     "invoices": ingest_invoices,
     "purchase_orders": ingest_purchase_orders,
     "item_receipts": ingest_item_receipts,

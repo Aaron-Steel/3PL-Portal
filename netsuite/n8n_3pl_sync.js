@@ -29,11 +29,14 @@ const CUSTOMERS = [
   { slug: 'mova', ns_customer_id: '11030', ns_supplier_id: '10872',
     ns_location_id: '49', ns_class_id: '253', ns_subsidiary_id: '2' },  // returns empty until stock arrives (~end Jul)
 ];
-const READ_ENTITIES = ['invoices', 'purchase_orders', 'item_receipts',
+const READ_ENTITIES = ['items', 'invoices', 'purchase_orders', 'item_receipts',
                        'item_fulfilments', 'stock_on_hand'];
 // charge_type -> NetSuite item internalid (for draft-invoice lines on push). Sandbox items.
 const CHARGE_ITEMS = { container_unload: '55070', putaway: '55071',
                        storage: '55072', picking_so: '55073', picking_vrma: '55074' };
+// units-per-pallet custom item field id (e.g. 'custitem_units_per_pallet'); blank = don't pull it.
+// Needed for storage pallet/charge calc. Leave '' until confirmed, then the items sync fills it.
+const UPP_FIELD = '';
 // --------------------------------------------------------------------------------------------
 
 const host = ACCOUNT_ID.toLowerCase().replace(/_/g, '-');
@@ -81,7 +84,9 @@ const out = [];
 for (const c of CUSTOMERS) {
   for (const entity of READ_ENTITIES) {
     try {
-      const rows = await restlet(Object.assign({ action: entity, since: SINCE }, c));
+      const params = Object.assign({ action: entity, since: SINCE }, c);
+      if (entity === 'items' && UPP_FIELD) params.upp_field = UPP_FIELD;
+      const rows = await restlet(params);
       const r = await helpers.httpRequest({
         method: 'POST', url: `${APP_BASE}/admin/ingest`, headers: appHeaders,
         body: { customer: c.slug, entity, rows }, json: true });

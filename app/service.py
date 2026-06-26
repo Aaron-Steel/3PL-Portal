@@ -55,7 +55,9 @@ def stock_on_order(db: Session, customer_id: int, imap: dict) -> list[dict]:
     return out
 
 
-def item_receipts(db: Session, customer_id: int, imap: dict) -> list[dict]:
+def item_receipts(db: Session, customer_id: int, imap: dict,
+                  names: dict | None = None) -> list[dict]:
+    names = names or {}
     recs = db.scalars(
         select(ItemReceipt).where(ItemReceipt.customer_id == customer_id)
         .order_by(ItemReceipt.trandate.desc())).all()
@@ -64,7 +66,8 @@ def item_receipts(db: Session, customer_id: int, imap: dict) -> list[dict]:
         for l in r.lines:
             out.append({"tranid": r.tranid, "trandate": r.trandate,
                         "shipment": r.ns_inbound_shipment,
-                        "sku": imap.get(l.ns_item_id, l.ns_item_id), "qty": float(l.qty)})
+                        "sku": imap.get(l.ns_item_id, l.ns_item_id),
+                        "name": names.get(l.ns_item_id, ""), "qty": float(l.qty)})
     return out
 
 

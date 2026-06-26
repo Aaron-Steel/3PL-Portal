@@ -63,7 +63,6 @@
       <div class="weekpick">Billing week <b>{{ week_label }}</b></div>
       <span class="pill ns">● NetSuite connected</span>
     </div>
-    <div class="ribbon"><b>Scaffold</b> · Demo data — NetSuite sync not yet wired. Numbers illustrate the rate card &amp; billing automation.</div>
 
     <div class="view">
     {% if view == "overview" %}
@@ -123,11 +122,11 @@
     {% elif view == "item_receipts" %}
       <div class="card"><header><h3>Item receipts</h3><span class="hint">against 3PL location · brand {{ customer.brand_label }}</span></header>
         <div class="tablewrap"><table>
-          <thead><tr><th>Receipt</th><th>Inbound shipment</th><th>Item</th><th class="r">Qty</th><th>Date</th></tr></thead>
+          <thead><tr><th>Receipt</th><th>Inbound shipment</th><th>SKU</th><th>Description</th><th class="r">Qty</th><th>Date</th></tr></thead>
           <tbody>{% for r in rows %}<tr><td><span class="id">{{ r.tranid }}</span></td><td><span class="id">{{ r.shipment or '—' }}</span></td>
-            <td class="prim">{{ r.sku }}</td><td class="r num">{{ r.qty|qty }}</td><td>{{ r.trandate|dshort }}</td></tr>
-          {% else %}<tr><td class="empty" colspan="5">No item receipts.</td></tr>{% endfor %}</tbody>
-          {% if rows %}<tfoot><tr><td colspan="3">{{ rows|length }} receipts</td><td class="r">{{ rows|sum(attribute='qty')|qty }}</td><td></td></tr></tfoot>{% endif %}
+            <td><span class="id">{{ r.sku }}</span></td><td class="prim">{{ r.name }}</td><td class="r num">{{ r.qty|qty }}</td><td>{{ r.trandate|dshort }}</td></tr>
+          {% else %}<tr><td class="empty" colspan="6">No item receipts.</td></tr>{% endfor %}</tbody>
+          {% if rows %}<tfoot><tr><td colspan="4">{{ rows|length }} receipts</td><td class="r">{{ rows|sum(attribute='qty')|qty }}</td><td></td></tr></tfoot>{% endif %}
         </table></div>
       </div>
 
