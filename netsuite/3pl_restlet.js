@@ -99,9 +99,10 @@ define(['N/query', 'N/record'], function (query, record) {
   }
 
   function stockOnHand(p) {
-    var flat = runSuiteQL("SELECT item, quantityonhand FROM inventorybalance WHERE location=" +
-      Number(p.ns_location_id));
-    return flat.map(function (r) { return { ns_item_id: String(r.item), qty_on_hand: r.quantityonhand }; });
+    // inventorybalance returns multiple rows per item (per status/bin); sum to one net qty/item.
+    var flat = runSuiteQL("SELECT item, SUM(quantityonhand) qty FROM inventorybalance WHERE location=" +
+      Number(p.ns_location_id) + " GROUP BY item");
+    return flat.map(function (r) { return { ns_item_id: String(r.item), qty_on_hand: r.qty }; });
   }
 
   function sinceExpr(since) {
@@ -110,19 +111,17 @@ define(['N/query', 'N/record'], function (query, record) {
     return "TO_DATE('" + d + "','YYYY-MM-DD')";
   }
 
-  // ---- WRITE action: create a DRAFT invoice from billing lines ----
+   // ---- WRITE action: create a DRAFT invoice from billing lines ----
   function createInvoice(p) {
     var rec = record.create({ type: record.Type.INVOICE, isDynamic: true });
     rec.setValue({ fieldId: 'entity', value: Number(p.ns_customer_id) });
     if (p.ns_subsidiary_id) rec.setValue({ fieldId: 'subsidiary', value: Number(p.ns_subsidiary_id) });
     // Location is mandatory on transactions in this account — set it on the header (cascades to
-    // lines) and on each line for accounts that require it line-level. ns_location_id is the
-    // customer's 3PL location (Skriva=2, Mova=49), passed through from the app's customer record.
+    // lines) and on each line for accounts that require it line-level.
     if (p.ns_location_id) rec.setValue({ fieldId: 'location', value: Number(p.ns_location_id) });
     if (p.memo) rec.setValue({ fieldId: 'memo', value: p.memo });
     (p.lines || []).forEach(function (l) {
       rec.selectNewLine({ sublistId: 'item' });
-      // charge_item map (charge_type -> NetSuite item id) is applied by n8n into l.item_id
       rec.setCurrentSublistValue({ sublistId: 'item', fieldId: 'item', value: Number(l.item_id) });
       rec.setCurrentSublistValue({ sublistId: 'item', fieldId: 'quantity', value: Number(l.qty) });
       rec.setCurrentSublistValue({ sublistId: 'item', fieldId: 'rate', value: Number(l.rate) });

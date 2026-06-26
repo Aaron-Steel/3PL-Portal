@@ -143,15 +143,24 @@ def ingest_inbound_shipments(db: Session, c: Customer, rows: list[dict]) -> int:
 
 def ingest_stock_on_hand(db: Session, c: Customer, rows: list[dict]) -> int:
     """A full snapshot for today. rows: [{ns_item_id, qty_on_hand, units_per_pallet?}].
-    Pallets = ceil(qty/units_per_pallet); units_per_pallet falls back to the Item record."""
+    NetSuite's inventorybalance returns MULTIPLE rows per item (per status/bin, incl. +/- pairs),
+    so first aggregate to one net qty per item — that keeps the (customer, today, item) snapshot
+    key unique and yields the true on-hand. Pallets = ceil(qty/units_per_pallet); units_per_pallet
+    falls back to the Item record."""
     today = date.today()
     upp = {i.ns_item_id: i.units_per_pallet
            for i in db.scalars(select(Item).where(Item.customer_id == c.id)).all()}
+    agg: dict[str, dict] = {}
     for r in rows:
         ns_item = str(r["ns_item_id"])
-        qty = _num(r.get("qty_on_hand")) or 0
-        per = r.get("units_per_pallet") or upp.get(ns_item)
-        pallets = math.ceil(qty / per) if per else None
+        a = agg.setdefault(ns_item, {"qty": 0.0, "per": None})
+        a["qty"] += _num(r.get("qty_on_hand")) or 0
+        if a["per"] is None and r.get("units_per_pallet"):
+            a["per"] = r.get("units_per_pallet")
+    for ns_item, a in agg.items():
+        qty = a["qty"]
+        per = a["per"] or upp.get(ns_item)
+        pallets = math.ceil(qty / per) if per and qty > 0 else (0 if per else None)
         existing = db.scalar(select(StockOnHand).where(
             StockOnHand.customer_id == c.id, StockOnHand.snapshot_date == today,
             StockOnHand.ns_item_id == ns_item))
@@ -160,7 +169,7 @@ def ingest_stock_on_hand(db: Session, c: Customer, rows: list[dict]) -> int:
         else:
             db.add(StockOnHand(customer_id=c.id, snapshot_date=today, ns_item_id=ns_item,
                                qty_on_hand=qty, units_per_pallet=per, pallets=pallets))
-    return len(rows)
+    return len(agg)
 
 
 INGEST = {
