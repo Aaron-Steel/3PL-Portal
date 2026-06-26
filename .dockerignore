@@ -1,0 +1,9 @@
+.venv
+data
+**/__pycache__
+*.pyc
+.env
+.git
+prototype
+resources
+*.md

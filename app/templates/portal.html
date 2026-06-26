@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — {{ customer.name }} — Macgear 3PL{% endblock %}
+{% block body %}
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <div class="mark">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 8.5 12 13l9-4.5M12 13v7" stroke="#9FE7EC" stroke-width="1.4" stroke-linejoin="round"/></svg>
+      </div>
+      <div><b>Macgear 3PL</b><span>Logistics Portal</span></div>
+    </div>
+
+    {% if is_internal %}
+    <div class="ctx">
+      <label>Customer account</label>
+      <div class="sel">
+        <select onchange="location.href='/c/'+this.value+'/{{ view }}'">
+          {% for c in customers %}
+          <option value="{{ c.slug }}" {{ 'selected' if c.id == customer.id }}>{{ c.name }} — {{ c.location_label.split('(')[0].strip() if c.location_label else '' }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    {% else %}
+    <div class="ctx"><label>Account</label><div class="acctname">{{ customer.name }}</div></div>
+    {% endif %}
+
+    <nav>
+      {% for group, items in NAV %}
+      {% set visible = items|selectattr('0','in',allowed)|list %}
+      {% if visible %}
+      <div class="navgrp"><h6>{{ group }}</h6>
+        {% for key, label, ic in items %}{% if key in allowed %}
+        <a href="/c/{{ customer.slug }}/{{ key }}" class="navitem {{ 'admin' if group == 'Macgear internal' }} {{ 'active' if key == view }}">
+          <svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none">{{ ICONS[ic]|safe }}</svg>
+          <span>{{ label }}</span>
+          {% if key in counts %}<span class="badge num">{{ counts[key] }}</span>{% endif %}
+        </a>
+        {% endif %}{% endfor %}
+      </div>
+      {% endif %}
+      {% endfor %}
+
+      {% if is_admin %}
+      <div class="navgrp"><h6>Administration</h6>
+        <a href="/admin/users" class="navitem admin"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none">{{ ICONS['doc']|safe }}</svg><span>Users</span></a>
+        <a href="/admin/customers" class="navitem admin"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none">{{ ICONS['tag']|safe }}</svg><span>Customers &amp; rates</span></a>
+      </div>
+      {% endif %}
+    </nav>
+
+    <div class="foot">
+      <div class="who"><span class="dot"></span> {{ current_user.email }}<br><span class="role">{{ current_user.role }}</span></div>
+      <a href="/logout" class="signout">Sign out</a>
+    </div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <button class="navtoggle" onclick="toggleNav()" aria-label="Open menu">☰</button>
+      <div><h1>{{ title }}</h1><div class="sub">{{ sub }}</div></div>
+      <div class="spacer"></div>
+      <div class="weekpick">Billing week <b>{{ week_label }}</b></div>
+      <span class="pill ns">● NetSuite connected</span>
+    </div>
+    <div class="ribbon"><b>Scaffold</b> · Demo data — NetSuite sync not yet wired. Numbers illustrate the rate card &amp; billing automation.</div>
+
+    <div class="view">
+    {% if view == "overview" %}
+      {% set d = data %}
+      <div class="kpis">
+        <div class="kpi k-stock"><div class="rail"></div><div class="lab">Units on hand</div>
+          <div class="val num">{{ d.units_on_hand|qty }}</div><div class="meta">{{ d.skus }} SKUs · {{ d.brand }}</div></div>
+        <div class="kpi k-pallet"><div class="rail"></div><div class="lab">Pallets stored</div>
+          <div class="val num">{{ d.pallets|qty }}</div><div class="meta">→ <b>${{ d.storage_per_week|money }}</b>/wk storage</div></div>
+        <div class="kpi k-order"><div class="rail"></div><div class="lab">Units on order</div>
+          <div class="val num">{{ d.units_on_order|qty }}</div><div class="meta">{{ d.open_pos }} open PO{{ 's' if d.open_pos != 1 }} inbound</div></div>
+        <div class="kpi k-bill"><div class="rail"></div><div class="lab">Charges this week</div>
+          <div class="val num">${{ d.week_total|money0 }}</div><div class="meta">{{ d.week_start|dshort }} – {{ d.week_end|dshort }}</div></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><header><h3>Weekly 3PL charges</h3><span class="hint">last 4 billing weeks</span></header>
+          <div class="chart"><div class="bars">
+            {% for h in d.history %}
+            <div class="bar {{ 'cur' if loop.last }}"><span class="vl">${{ (h.total/1000)|round(1) }}k</span>
+              <div class="fill" style="height:{{ (h.total / d.history_max * 100)|round }}%"></div><span class="lb">{{ h.label }}</span></div>
+            {% endfor %}
+          </div></div>
+        </div>
+        <div class="card"><header><h3>This week so far</h3></header>
+          <div class="pad weekpanel">
+            {% for l in d.week_lines %}
+            <div class="wl"><span>{{ l.label }} <b class="num faint">{{ l.qty|qty }}</b></span><b class="num">${{ l.amount|money }}</b></div>
+            {% endfor %}
+            <div class="wl total"><span>Projected invoice</span><span class="num">${{ d.week_total|money }}</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="card"><header><h3>Recent activity</h3></header>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Reference</th><th>Type</th><th>Item</th><th class="r">Qty</th><th>Date</th></tr></thead>
+          <tbody>{% for r in d.recent %}<tr>
+            <td><span class="id">{{ r.tranid }}</span></td>
+            <td>{% if r.kind == 'Receipt' %}<span class="tag rcpt">Receipt</span>{% elif r.source == 'VRMA' %}<span class="tag vrma">VRMA</span>{% else %}<span class="tag so">SO</span>{% endif %}</td>
+            <td class="prim">{{ r.sku }}</td><td class="r num">{{ r.qty|qty }}</td><td>{{ r.trandate|dshort }}</td></tr>
+          {% else %}<tr><td class="empty" colspan="5">No recent activity.</td></tr>{% endfor %}</tbody>
+        </table></div>
+      </div>
+
+    {% elif view == "stock_on_order" %}
+      {% set tot_out = rows|sum(attribute='outstanding') %}
+      <div class="card"><header><h3>Open purchase orders</h3><span class="hint">keyed at $0 — customer retains ownership</span></header>
+        <div class="tablewrap"><table>
+          <thead><tr><th>PO</th><th>Item</th><th class="r">Ordered</th><th class="r">Received</th><th class="r">Outstanding</th><th>Expected</th><th>Status</th></tr></thead>
+          <tbody>{% for r in rows %}<tr><td><span class="id">{{ r.tranid }}</span></td><td class="prim">{{ r.sku }}</td>
+            <td class="r num">{{ r.ordered|qty }}</td><td class="r num">{{ r.received|qty }}</td><td class="r num">{{ r.outstanding|qty }}</td>
+            <td>{{ r.expected|dshort }}</td><td><span class="chip {{ r.status|chip }}">{{ r.status }}</span></td></tr>
+          {% else %}<tr><td class="empty" colspan="7">No open purchase orders.</td></tr>{% endfor %}</tbody>
+          {% if rows %}<tfoot><tr><td colspan="4">{{ rows|map(attribute='tranid')|unique|list|length }} open</td><td class="r">{{ tot_out|qty }}</td><td colspan="2"></td></tr></tfoot>{% endif %}
+        </table></div>
+      </div>
+
+    {% elif view == "item_receipts" %}
+      <div class="card"><header><h3>Item receipts</h3><span class="hint">against 3PL location · brand {{ customer.brand_label }}</span></header>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Receipt</th><th>Inbound shipment</th><th>Item</th><th class="r">Qty</th><th>Date</th></tr></thead>
+          <tbody>{% for r in rows %}<tr><td><span class="id">{{ r.tranid }}</span></td><td><span class="id">{{ r.shipment or '—' }}</span></td>
+            <td class="prim">{{ r.sku }}</td><td class="r num">{{ r.qty|qty }}</td><td>{{ r.trandate|dshort }}</td></tr>
+          {% else %}<tr><td class="empty" colspan="5">No item receipts.</td></tr>{% endfor %}</tbody>
+          {% if rows %}<tfoot><tr><td colspan="3">{{ rows|length }} receipts</td><td class="r">{{ rows|sum(attribute='qty')|qty }}</td><td></td></tr></tfoot>{% endif %}
+        </table></div>
+      </div>
+
+    {% elif view == "stock_on_hand" %}
+      <div class="card"><header><h3>Stock on hand</h3><span class="hint">{{ customer.location_label }}{% if rows %} · snapshot {{ rows[0].snapshot_date|dshort }}{% endif %}</span></header>
+        <div class="tablewrap"><table>
+          <thead><tr><th>SKU</th><th>Description</th><th class="r">On hand</th><th class="r">Units / pallet</th><th class="r">Pallets</th><th class="r">Storage / wk</th></tr></thead>
+          <tbody>{% for r in rows %}<tr><td><span class="id">{{ r.sku }}</span></td><td class="prim">{{ r.name }}</td>
+            <td class="r num">{{ r.qty_on_hand|qty }}</td><td class="r num">{{ r.units_per_pallet }}</td><td class="r num">{{ r.pallets|qty }}</td>
+            <td class="r num">${{ r.storage_per_week|money }}</td></tr>
+          {% else %}<tr><td class="empty" colspan="6">No stock on hand.</td></tr>{% endfor %}</tbody>
+          {% if rows %}<tfoot><tr><td colspan="2">{{ rows|length }} SKUs</td><td class="r">{{ rows|sum(attribute='qty_on_hand')|qty }}</td><td></td>
+            <td class="r">{{ rows|sum(attribute='pallets')|qty }}</td><td class="r">${{ rows|sum(attribute='storage_per_week')|money }}</td></tr></tfoot>{% endif %}
+        </table></div>
+      </div>
+
+    {% elif view == "fulfilments" %}
+      <div class="card"><header><h3>Fulfilments</h3><span class="hint">sales orders + VRMA transfers · drives per-unit pick fee</span></header>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Fulfilment</th><th>Type</th><th>Source</th><th>Item</th><th class="r">Qty</th><th>Date</th></tr></thead>
+          <tbody>{% for r in rows %}<tr><td><span class="id">{{ r.tranid }}</span></td>
+            <td>{% if r.source == 'VRMA' %}<span class="tag vrma">VRMA</span>{% else %}<span class="tag so">SO</span>{% endif %}</td>
+            <td><span class="id">{{ r.ref or '—' }}</span></td><td class="prim">{{ r.sku }}</td><td class="r num">{{ r.qty|qty }}</td><td>{{ r.trandate|dshort }}</td></tr>
+          {% else %}<tr><td class="empty" colspan="6">No fulfilments.</td></tr>{% endfor %}</tbody>
+          {% if rows %}<tfoot><tr><td colspan="4">{{ rows|length }} fulfilments</td><td class="r">{{ rows|sum(attribute='qty')|qty }}</td><td></td></tr></tfoot>{% endif %}
+        </table></div>
+      </div>
+
+    {% elif view == "invoices" and invoice %}
+      <a class="link" href="/c/{{ customer.slug }}/invoices">← All invoices</a>
+      <div class="invmeta">
+        <div><span class="lab">Invoice</span><b>{{ invoice.tranid or invoice.ns_invoice_id }}</b></div>
+        <div><span class="lab">Date</span><b>{{ invoice.trandate|d }}</b></div>
+        <div><span class="lab">Status</span><span class="chip {{ invoice.status|chip }}">{{ invoice.status }}</span></div>
+        <div><span class="lab">Total (ex GST)</span><b class="num">${{ invoice.total|money }}</b></div>
+      </div>
+      <div class="card"><header><h3>What was charged</h3><span class="hint">3PL service charge lines</span></header>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Charge</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead>
+          <tbody>{% for l in lines %}<tr><td class="prim">{{ l.description }}</td>
+            <td class="r num">{{ l.qty|qty }}</td><td class="r num">{{ '$' ~ l.rate|money if l.rate is not none else '—' }}</td>
+            <td class="r num"><b>${{ l.amount|money }}</b></td></tr>
+          {% else %}<tr><td class="empty" colspan="4">No line detail on this invoice.</td></tr>{% endfor %}</tbody>
+          {% if lines %}<tfoot><tr><td colspan="3">Invoice total (ex GST)</td><td class="r">${{ lines|sum(attribute='amount')|money }}</td></tr></tfoot>{% endif %}
+        </table></div>
+      </div>
+
+    {% elif view == "invoices" %}
+      <div class="card"><header><h3>Invoices</h3><span class="hint">3PL service charges on your account · click to view detail</span></header>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Invoice</th><th>Date</th><th class="r">Amount</th><th>Status</th><th></th></tr></thead>
+          <tbody>{% for r in rows %}<tr class="clickrow" onclick="location.href='/c/{{ customer.slug }}/invoice/{{ r.id }}'">
+            <td><a class="id idlink" href="/c/{{ customer.slug }}/invoice/{{ r.id }}">{{ r.tranid }}</a></td><td>{{ r.trandate|dshort }}</td>
+            <td class="r num">${{ r.total|money }}</td><td><span class="chip {{ r.status|chip }}">{{ r.status }}</span></td>
+            <td class="r chev">›</td></tr>
+          {% else %}<tr><td class="empty" colspan="5">No invoices.</td></tr>{% endfor %}</tbody>
+          {% if rows %}<tfoot><tr><td colspan="2">{{ rows|length }} invoices</td><td class="r">${{ rows|sum(attribute='total')|money }}</td><td colspan="2"></td></tr></tfoot>{% endif %}
+        </table></div>
+      </div>
+
+    {% elif view == "rate_card" %}
+      <div class="card"><header><h3>{{ customer.name }} — 3PL rate card</h3><span class="hint">{{ customer.location_label }}</span></header>
+        <div class="rate">{% for r in rows %}
+          <div class="rate-row"><div class="rl"><b>{{ r.label }}</b></div>
+            <div class="rr"><div class="amt num">${{ r.rate|money }}</div><span class="per">{{ r.basis|replace('_',' ') }}</span></div></div>
+        {% else %}<div class="empty">No rate card.</div>{% endfor %}</div>
+      </div>
+
+    {% elif view == "billing" %}
+      <div class="flowline">Automated weekly run · <code>SuiteQL</code> → <code>rate card</code> → <code>draft invoice</code> on the {{ customer.name }} customer record · replaces 5 manual saved searches</div>
+      {% set flash = {'saved':['ok','Billing run saved as draft.'],
+                      'queued':['ok','Queued for NetSuite — n8n creates the draft invoice on its next run; it appears under Invoices after the following sync.'],
+                      'already-queued':['warn','This run is already queued or pushed.'],
+                      'already-invoiced':['warn','This period is already queued/invoiced — re-billing is blocked.']}.get(msg) %}
+      {% if flash %}<div class="flash {{ flash[0] }}">{{ flash[1] }}</div>{% endif %}
+      {% if locked_run %}<div class="flash warn">This period was already pushed to NetSuite (run #{{ locked_run.id }}) — preview is read-only to prevent double-billing.</div>{% endif %}
+      <form class="period" method="get" action="/c/{{ customer.slug }}/billing">
+        <label>From <input type="date" name="from" value="{{ period_start }}"></label>
+        <label>To <input type="date" name="to" value="{{ period_end }}"></label>
+        <button type="submit">Preview</button>
+      </form>
+      <div class="billgrid">
+        <div class="card"><div class="tablewrap"><table>
+          <thead><tr><th>Charge</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead>
+          <tbody>{% for l in result.lines %}<tr><td class="prim">{{ l.label }}</td><td class="r num">{{ l.qty|qty }}</td>
+            <td class="r num">${{ l.rate|money }}<span class="sub2">/{{ l.basis|replace('per_','')|replace('_',' ') }}</span></td>
+            <td class="r num"><b>${{ l.amount|money }}</b></td></tr>
+          {% else %}<tr><td class="empty" colspan="4">No billable activity in this period.</td></tr>{% endfor %}</tbody>
+          {% if result.lines %}<tfoot><tr><td colspan="3">Invoice total (ex GST)</td><td class="r">${{ result.total|money }}</td></tr></tfoot>{% endif %}
+        </table></div></div>
+        <div class="summary">
+          <header><div class="lab">Draft invoice · {{ period_start }} → {{ period_end }}</div>
+            <div class="tot num">${{ result.total|money }}</div><div class="for">{{ customer.name }} customer record</div></header>
+          <div class="lines">{% for l in result.lines %}<div class="sl"><span>{{ l.label }}</span><b class="num">${{ l.amount|money }}</b></div>{% endfor %}</div>
+          <div class="act">
+            <form method="post" action="/c/{{ customer.slug }}/billing/run">
+              <input type="hidden" name="period_start" value="{{ period_start }}">
+              <input type="hidden" name="period_end" value="{{ period_end }}">
+              <button class="btn primary" type="submit" {{ 'disabled' if not result.lines or locked_run }}>Save draft billing run</button>
+            </form>
+            <span class="note">Save the draft, then push it to NetSuite from the run below.</span>
+          </div>
+        </div>
+      </div>
+      {% if runs %}
+      <h2>Saved runs</h2>
+      <div class="card"><div class="tablewrap"><table>
+        <thead><tr><th>Period</th><th>Status</th><th class="r">Lines</th><th class="r">Total</th><th>Invoice</th><th></th></tr></thead>
+        <tbody>{% for run in runs %}
+        {% set chipcls = 'c-good' if run.status=='invoiced' else 'c-info' if run.status=='pushed' else 'c-warn' if run.status=='ready_to_push' else 'c-neutral' %}
+        <tr><td>{{ run.period_start|dshort }} – {{ run.period_end|dshort }}</td>
+          <td><span class="chip {{ chipcls }}">{{ run.status|replace('_',' ') }}</span></td>
+          <td class="r num">{{ run.lines|length }}</td>
+          <td class="r num">${{ (run.lines|sum(attribute='amount'))|money }}</td>
+          <td>{% if run_invoice.get(run.id) %}<a class="link" href="/c/{{ customer.slug }}/invoice/{{ run_invoice[run.id] }}">View invoice</a>
+              {% elif run.ns_invoice_id %}<span class="sub2">NS #{{ run.ns_invoice_id }} (awaiting sync)</span>
+              {% elif run.status == 'ready_to_push' %}<span class="sub2">queued for n8n</span>
+              {% else %}<span class="sub2">—</span>{% endif %}</td>
+          <td class="r">{% if run.status == 'draft' %}
+            <form method="post" action="/c/{{ customer.slug }}/billing/push/{{ run.id }}">
+              <button class="btn mini" type="submit">Queue for NetSuite</button></form>
+          {% endif %}</td>
+        </tr>{% endfor %}</tbody>
+      </table></div></div>
+      <p class="note">Queuing marks the run for n8n, which creates a <b>draft</b> invoice in NetSuite via the RESTlet for approval. The portal shows the real invoice (status, edits, payments) once the next sync pulls it back — the app keeps only the link and never calls NetSuite itself.</p>
+      {% endif %}
+    {% endif %}
+    </div>
+  </main>
+  <div class="scrim" onclick="toggleNav()"></div>
+</div>
+<script>function toggleNav(){document.querySelector('.app').classList.toggle('navopen')}</script>
+{% endblock %}

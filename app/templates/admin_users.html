@@ -1,0 +1,19 @@
+{% extends "admin_base.html" %}
+{% set heading = "Users" %}
+{% block admin %}
+<div class=" a-head">
+  <h1>Users</h1>
+  <a class="btn primary" href="/admin/users/new">+ New user</a>
+</div>
+<div class="card"><div class="tablewrap"><table>
+  <thead><tr><th>Email</th><th>Role</th><th>Customer</th><th class="r">Views</th><th>Status</th><th></th></tr></thead>
+  <tbody>{% for r in rows %}<tr>
+    <td class="prim">{{ r.u.email }}</td>
+    <td><span class="chip {{ 'c-info' if r.u.role=='admin' else 'c-good' if r.u.role=='internal' else 'c-neutral' }}">{{ r.u.role }}</span></td>
+    <td>{{ r.customer }}</td>
+    <td class="r num">{{ r.views }}{% if r.custom %} <span class="sub2">(custom)</span>{% endif %}</td>
+    <td>{% if r.u.active %}<span class="chip c-good">active</span>{% else %}<span class="chip c-crit">disabled</span>{% endif %}</td>
+    <td class="r"><a class="link" href="/admin/users/{{ r.u.id }}">Edit</a></td>
+  </tr>{% endfor %}</tbody>
+</table></div></div>
+{% endblock %}

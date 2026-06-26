@@ -1,0 +1,71 @@
+# Deploy to the droplet — sandbox first, then production
+
+The app never calls NetSuite (see `netsuite_integration.md`). Deploying is therefore just:
+ship the web app, deploy the RESTlet in NetSuite, point the n8n Code node at it. Do it all
+against the **NetSuite sandbox** first, then flip a handful of constants to go to production.
+
+## 0. What the sandbox actually lets you test
+- **Skriva** is live in the sandbox (customer `10496`, vendor `10503`, location `2`, class `236`)
+  — this is your real end-to-end sync test. Internal ids usually match prod in a refresh copy,
+  but confirm them in the sandbox UI before trusting them.
+- **Mova does not exist in NetSuite yet** (stock expected end of July 2026). Its `ns_customer_id`
+  /`ns_supplier_id` are `TBD` in the seed. So sandbox testing = Skriva only until Mova is created.
+- The service items in `CHARGE_ITEMS` (container_unload, putaway, storage, picking_so, picking_vrma)
+  must exist in the sandbox for `create_invoice` to work. Skriva's rate card is seeded at $0, so a
+  Skriva billing run produces a $0 draft — perfect for proving the push loop without real charges.
+
+## 1. App on the droplet (Docker, behind Caddy)
+1. Copy this repo to the droplet (the GitHub repo, see README) and `cd` in.
+2. `cp .env.example .env` and fill it in:
+   - `APP_SECRET`, `SYNC_TOKEN`, `PGPASSWORD` → `openssl rand -hex 32` (use the same password in `DATABASE_URL`).
+   - `SHARED_NETWORK` → the network Caddy + n8n are on (`docker network ls`).
+   - Leave `SEED_DEMO=0` so no fake cache rows are planted.
+3. `docker compose up -d --build`. First boot creates the schema and seeds Mova/Skriva + rate cards
+   + the admin/internal users. **Log in and change the seeded passwords immediately.**
+4. Add a Caddy site block (mirrors the promos app) and reload Caddy:
+   ```
+   3pl.macgeargroup.com {
+       reverse_proxy threepl:8000
+   }
+   ```
+   The app has its own per-user login, so Caddy basic-auth is optional here (unlike promos).
+   To add an outer gate anyway: `basic_auth { aaron <bcrypt-hash> }` (`caddy hash-password`).
+
+## 2. RESTlet in the NetSuite **sandbox**
+1. Sandbox → Setup > Company > Enable Features → SuiteCloud: tick **Token-Based Authentication**
+   and **SuiteScript / RESTlets**.
+2. Customization > Scripting > Scripts > New → upload `netsuite/3pl_restlet.js`, type **RESTlet**,
+   POST function = `post`. Create a **Deployment**, status **Released**, on an integration role that
+   can run SuiteQL and create invoices. Copy the `script=` and `deploy=` ids from the External URL.
+
+## 3. TBA credentials (sandbox)
+1. Setup > Integration > Manage Integrations > New → enable Token-Based Auth → save the
+   **Consumer Key/Secret**.
+2. Setup > Users/Roles > Access Tokens > New → that integration + the integration role →
+   save the **Token ID/Secret**.
+3. Note the **sandbox Account ID** — it looks like `1234567_SB1`.
+
+## 4. n8n Code node (sandbox values)
+In `netsuite/n8n_3pl_sync.js` fill the constants:
+- `ACCOUNT_ID = '1234567_SB1'` — the node lowercases + swaps `_`→`-` for the URL host automatically.
+- `CONSUMER_KEY/SECRET`, `TOKEN_ID/SECRET`, `RESTLET_SCRIPT`, `RESTLET_DEPLOY` from steps 2–3.
+- `APP_BASE = 'http://threepl:8000'`, `SYNC_TOKEN` = the app's `SYNC_TOKEN`.
+- `CUSTOMERS`: keep Skriva for sandbox testing; verify its ids resolve in the sandbox.
+- `CHARGE_ITEMS`: each charge_type → its NetSuite invoice item internalid (in the sandbox).
+
+Wire: **Schedule Trigger → this Code node.** Run once manually first and read the node output
+(it returns one item per read/push step, with `error` keys on any failure).
+
+## 5. Verify the loop (sandbox)
+- Reads: after a manual run, the portal's Skriva views (POs, receipts, fulfilments, invoices,
+  stock-on-hand) should reflect sandbox data.
+- Writes: queue a Skriva billing run in the portal → it shows `ready_to_push` →
+  `GET /admin/billing/pending` lists it → next n8n run creates a $0 draft invoice in the sandbox
+  and posts the id back → the run flips to `pushed` and links to the invoice.
+
+## 6. Go to production
+Flip only the NetSuite-side constants in the n8n node: `ACCOUNT_ID` (prod, no `_SB1`), the four
+TBA creds (prod integration + token), and the prod `RESTLET_SCRIPT`/`RESTLET_DEPLOY` (deploy the
+same RESTlet in prod). Add Mova to `CUSTOMERS` once its NetSuite records exist, and set Mova's real
+`ns_customer_id`/`ns_supplier_id` in the app (Admin → Customers). The app and its `SYNC_TOKEN` don't
+change between environments.

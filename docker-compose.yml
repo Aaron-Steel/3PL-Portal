@@ -1,0 +1,46 @@
+# Macgear 3PL Portal — droplet stack (same shape as the vendor-credit-claims app).
+# `threepl` joins the shared Caddy/n8n network so Caddy can reverse-proxy it and the n8n
+# Code node can POST to http://threepl:8000 (matches APP_BASE in netsuite/n8n_3pl_sync.js).
+# A bundled Postgres is included for self-contained sandbox testing — to use managed Postgres
+# instead, point DATABASE_URL at it in .env and delete the threepl-db service + depends_on.
+
+services:
+  threepl:
+    build: .
+    container_name: threepl          # must stay "threepl" — n8n APP_BASE depends on it
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      threepl-db:
+        condition: service_healthy
+    networks:
+      - default
+      - shared
+
+  threepl-db:
+    image: postgres:16
+    container_name: threepl-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: threepl
+      POSTGRES_PASSWORD: ${PGPASSWORD}
+      POSTGRES_DB: threepl
+    volumes:
+      - threepl-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U threepl"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - default
+
+volumes:
+  threepl-db-data:
+
+networks:
+  # The existing shared network that Caddy + n8n are already on. Set its real name in .env
+  # (SHARED_NETWORK=...). Find it with: docker network ls
+  shared:
+    external: true
+    name: ${SHARED_NETWORK:-web}

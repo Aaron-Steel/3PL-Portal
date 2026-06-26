@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ heading }} — Macgear 3PL Settings{% endblock %}
+{% block body %}
+<div class="adminwrap">
+  <header class="adminhead">
+    <div class="ah-brand">Macgear 3PL · <b>Settings</b></div>
+    <nav class="ah-nav">
+      <a href="/admin/users" class="{{ 'on' if section == 'users' }}">Users</a>
+      <a href="/admin/customers" class="{{ 'on' if section == 'customers' }}">Customers &amp; rate cards</a>
+    </nav>
+    <a class="ah-back" href="/">← Back to portal</a>
+  </header>
+  <main class="adminmain">
+    {% block admin %}{% endblock %}
+  </main>
+</div>
+{% endblock %}

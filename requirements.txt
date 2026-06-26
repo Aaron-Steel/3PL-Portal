@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+jinja2
+sqlalchemy
+python-multipart
+psycopg2-binary  # Postgres driver (droplet); local dev uses bundled SQLite

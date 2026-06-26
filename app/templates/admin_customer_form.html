@@ -1,0 +1,35 @@
+{% extends "admin_base.html" %}
+{% set heading = "Customer" %}
+{% block admin %}
+<div class="a-head"><h1>{{ c.name }}</h1><a class="link" href="/admin/customers">← All customers</a></div>
+{% if request.query_params.get('saved') %}<div class="savedbar">✓ Saved.</div>{% endif %}
+
+<form class="card formcard" method="post" action="/admin/customers/{{ c.id }}">
+  <h3 class="fsec">Account</h3>
+  <div class="frow">
+    <label class="f">Name<input name="name" value="{{ c.name }}"></label>
+    <label class="f">Brand label<input name="brand_label" value="{{ c.brand_label or '' }}"></label>
+  </div>
+  <label class="f">Location label<input name="location_label" value="{{ c.location_label or '' }}"></label>
+  <div class="frow">
+    <label class="f">NetSuite customer id<input name="ns_customer_id" value="{{ c.ns_customer_id }}"></label>
+    <label class="f">NetSuite supplier id<input name="ns_supplier_id" value="{{ c.ns_supplier_id or '' }}"></label>
+  </div>
+  <div class="frow">
+    <label class="f">3PL location id<input name="ns_location_id" value="{{ c.ns_location_id or '' }}"></label>
+    <label class="f">Brand class id<input name="ns_class_id" value="{{ c.ns_class_id or '' }}"></label>
+  </div>
+
+  <h3 class="fsec">Rate card</h3>
+  <p class="sub2" style="margin:0 0 12px">Changing a rate creates a new effective-dated version (from today); past billing runs keep their original rates.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Charge</th><th>Basis</th><th class="r" style="width:160px">Rate ($)</th></tr></thead>
+    <tbody>{% for ch in charges %}<tr>
+      <td class="prim">{{ ch.label }}</td><td>{{ ch.basis|replace('_',' ') }}</td>
+      <td class="r"><input class="rateinput" type="number" step="0.01" min="0" name="rate_{{ ch.charge_type }}" value="{{ '%.2f'|format(ch.rate) }}"></td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+
+  <div class="formact"><button class="btn primary" type="submit">Save</button></div>
+</form>
+{% endblock %}

@@ -1,0 +1,513 @@
+<title>Macgear 3PL Portal — Prototype</title>
+<style>
+  :root{
+    --ground:#F4F6F8; --surface:#FFFFFF; --surface-2:#FAFBFC;
+    --ink:#16212E; --ink-2:#3F4B5B; --muted:#6C7785; --faint:#97A1AD;
+    --line:#E4E8ED; --line-2:#EEF1F4;
+    --brand:#0E5A61; --brand-ink:#0A4248; --brand-tint:#E4EFEF; --brand-tint-2:#F0F6F6;
+    --amber:#A9690A; --amber-tint:#F6ECD9;
+    --good:#2D7A57; --good-tint:#E3F0E9;
+    --warn:#9C6A0E; --warn-tint:#F6EDD8;
+    --crit:#B0463C; --crit-tint:#F6E4E1;
+    --info:#2C5A8C; --info-tint:#E3ECF5;
+    --r:10px; --r-sm:7px;
+    --mono:"Cascadia Code","Cascadia Mono",Consolas,"SF Mono",ui-monospace,monospace;
+    --ui:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+    --shadow:0 1px 2px rgba(20,33,46,.04),0 2px 8px rgba(20,33,46,.05);
+    --shadow-lg:0 8px 30px rgba(20,33,46,.10);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--ground);color:var(--ink);font-family:var(--ui);
+    font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  }
+  .num{font-variant-numeric:tabular-nums}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  button{font-family:inherit}
+  ::selection{background:var(--brand-tint)}
+
+  /* ---------- shell ---------- */
+  .app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
+  .side{
+    background:#0C2A2D;color:#CFE0E0;display:flex;flex-direction:column;
+    border-right:1px solid #0A2225;position:sticky;top:0;height:100vh;
+  }
+  .brand{display:flex;align-items:center;gap:11px;padding:18px 18px 16px}
+  .brand .mark{
+    width:34px;height:34px;border-radius:8px;flex:0 0 auto;display:grid;place-items:center;
+    background:linear-gradient(150deg,#16858f,#0E5A61);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);
+  }
+  .brand .mark svg{display:block}
+  .brand b{color:#fff;font-size:15px;font-weight:650;letter-spacing:-.2px;display:block;line-height:1.15}
+  .brand span{color:#7FA6A8;font-size:11px;letter-spacing:.3px}
+
+  .ctx{margin:4px 12px 10px;padding:10px 11px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);border-radius:9px}
+  .ctx label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.9px;color:#7FA6A8;margin-bottom:6px}
+  .ctx .sel{position:relative}
+  .ctx select{
+    width:100%;appearance:none;background:#103A3E;color:#fff;border:1px solid rgba(255,255,255,.12);
+    border-radius:7px;padding:8px 30px 8px 10px;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;
+  }
+  .ctx select:focus-visible{outline:2px solid #36c0cc;outline-offset:1px}
+  .ctx .sel::after{content:"";position:absolute;right:11px;top:50%;width:7px;height:7px;border-right:2px solid #8FB6B8;border-bottom:2px solid #8FB6B8;transform:translateY(-70%) rotate(45deg);pointer-events:none}
+
+  nav{padding:6px 12px;overflow-y:auto;flex:1}
+  .navgrp{margin-top:14px}
+  .navgrp h6{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#5E8587;margin:0 0 6px 10px;font-weight:700}
+  .navitem{
+    display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;background:transparent;
+    color:#BBD2D2;padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13.5px;margin-bottom:1px;
+  }
+  .navitem .ic{width:16px;height:16px;flex:0 0 auto;opacity:.8}
+  .navitem .badge{margin-left:auto;font-size:11px;background:rgba(255,255,255,.1);padding:1px 7px;border-radius:20px;font-variant-numeric:tabular-nums;color:#cfe0e0}
+  .navitem:hover{background:rgba(255,255,255,.06);color:#fff}
+  .navitem.active{background:#15c2cf18;color:#fff;box-shadow:inset 2px 0 0 #2fbecb}
+  .navitem.active .ic{opacity:1}
+  .navitem.admin .badge{background:var(--amber);color:#fff}
+  .side .foot{padding:12px 18px;border-top:1px solid rgba(255,255,255,.07);font-size:11px;color:#6E9698;display:flex;align-items:center;gap:7px}
+  .dot{width:7px;height:7px;border-radius:50%;background:#3EC2A0;box-shadow:0 0 0 3px #3ec2a033}
+
+  /* ---------- main ---------- */
+  main{display:flex;flex-direction:column;min-width:0}
+  .topbar{
+    display:flex;align-items:center;gap:16px;padding:14px 28px;background:var(--surface);
+    border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;
+  }
+  .topbar h1{font-size:18px;margin:0;font-weight:650;letter-spacing:-.3px}
+  .topbar .sub{color:var(--muted);font-size:12.5px;margin-top:1px}
+  .topbar .spacer{flex:1}
+  .weekpick{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:7px 11px}
+  .weekpick b{color:var(--ink);font-variant-numeric:tabular-nums}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 11px;border-radius:20px}
+  .pill.ns{background:var(--brand-tint);color:var(--brand-ink)}
+
+  .ribbon{background:linear-gradient(90deg,var(--amber-tint),#fbf4e6);border-bottom:1px solid #ecdcbb;color:#7a4f08;font-size:12.5px;padding:8px 28px;display:flex;align-items:center;gap:9px}
+  .ribbon b{font-weight:700}
+
+  .view{padding:24px 28px 60px;max-width:1180px}
+  .view-intro{margin:0 0 18px}
+  .view-intro p{margin:4px 0 0;color:var(--muted);font-size:13px;max-width:70ch}
+
+  /* KPI */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:15px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+  .kpi .lab{font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:7px}
+  .kpi .val{font-size:27px;font-weight:680;letter-spacing:-.6px;margin-top:7px;font-variant-numeric:tabular-nums;line-height:1}
+  .kpi .val small{font-size:14px;font-weight:600;color:var(--muted);letter-spacing:0}
+  .kpi .meta{font-size:12px;color:var(--muted);margin-top:8px}
+  .kpi .meta .up{color:var(--good);font-weight:600}
+  .kpi .meta .dn{color:var(--crit);font-weight:600}
+  .kpi .rail{position:absolute;left:0;top:0;bottom:0;width:3px}
+  .kpi.k-stock .rail{background:var(--brand)} .kpi.k-pallet .rail{background:var(--amber)}
+  .kpi.k-order .rail{background:var(--info)} .kpi.k-bill .rail{background:var(--good)}
+
+  .grid2{display:grid;grid-template-columns:1.55fr 1fr;gap:18px;margin-bottom:20px}
+  @media(max-width:1080px){.grid2{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}.app{grid-template-columns:200px 1fr}}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+  .card > header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line-2)}
+  .card > header h3{margin:0;font-size:14.5px;font-weight:650}
+  .card > header .hint{font-size:11.5px;color:var(--faint);margin-left:auto;font-style:italic}
+  .card .pad{padding:16px}
+
+  /* chart */
+  .chart{padding:8px 16px 16px}
+  .bars{display:flex;align-items:flex-end;gap:10px;height:150px;padding-top:10px}
+  .bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;height:100%;justify-content:flex-end}
+  .bar .fill{width:100%;max-width:34px;background:linear-gradient(180deg,#1d8189,#0E5A61);border-radius:5px 5px 0 0;transition:height .5s ease}
+  .bar.cur .fill{background:linear-gradient(180deg,#36c0cc,#16858f);box-shadow:0 0 0 1px #16858f33}
+  .bar .lb{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .bar .vl{font-size:10.5px;color:var(--ink-2);font-weight:600;font-variant-numeric:tabular-nums}
+
+  /* table */
+  .tablewrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{
+    text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:600;
+    padding:10px 16px;border-bottom:1px solid var(--line);background:var(--surface-2);white-space:nowrap;position:sticky;top:0;
+  }
+  th.r,td.r{text-align:right}
+  tbody td{padding:11px 16px;border-bottom:1px solid var(--line-2);vertical-align:middle;white-space:nowrap}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr:hover{background:var(--brand-tint-2)}
+  td .id{font-family:var(--mono);font-size:12.5px;color:var(--ink-2)}
+  td .prim{font-weight:600}
+  td .sub2{color:var(--muted);font-size:12px}
+  tfoot td{padding:12px 16px;font-weight:650;border-top:2px solid var(--line);background:var(--surface-2);font-variant-numeric:tabular-nums}
+
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:6px;white-space:nowrap}
+  .chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.9}
+  .c-good{background:var(--good-tint);color:var(--good)}
+  .c-info{background:var(--info-tint);color:var(--info)}
+  .c-warn{background:var(--warn-tint);color:var(--warn)}
+  .c-crit{background:var(--crit-tint);color:var(--crit)}
+  .c-neutral{background:#EEF1F4;color:var(--ink-2)}
+  .tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.4px;padding:2px 7px;border-radius:5px;text-transform:uppercase}
+  .tag.so{background:var(--brand-tint);color:var(--brand-ink)} .tag.vrma{background:var(--amber-tint);color:var(--amber)}
+
+  /* rate card */
+  .rate{display:grid;gap:0}
+  .rate-row{display:grid;grid-template-columns:1fr auto;gap:18px;padding:16px;border-bottom:1px solid var(--line-2);align-items:start}
+  .rate-row:last-child{border-bottom:0}
+  .rate-row .rl b{font-size:14.5px;font-weight:650;text-transform:capitalize}
+  .rate-row .rl p{margin:5px 0 0;color:var(--muted);font-size:12.5px;max-width:62ch}
+  .rate-row .rr{text-align:right;white-space:nowrap}
+  .rate-row .rr .amt{font-size:22px;font-weight:680;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+  .rate-row .rr .per{font-size:11.5px;color:var(--muted);display:block;margin-top:2px}
+
+  /* billing run */
+  .billgrid{display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start}
+  @media(max-width:980px){.billgrid{grid-template-columns:1fr}}
+  .bill-line td .src{font-family:var(--mono);font-size:11.5px;color:var(--info);background:var(--info-tint);padding:2px 7px;border-radius:5px;display:inline-block;margin-top:4px}
+  .summary{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);position:sticky;top:86px;overflow:hidden}
+  .summary header{padding:15px 17px;background:linear-gradient(150deg,#0E5A61,#0A4248);color:#fff}
+  .summary header .lab{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:#9DC4C5}
+  .summary header .tot{font-size:30px;font-weight:700;letter-spacing:-.8px;margin-top:3px;font-variant-numeric:tabular-nums}
+  .summary header .for{font-size:12.5px;color:#BBD7D8;margin-top:2px}
+  .summary .lines{padding:6px 17px}
+  .summary .sl{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line-2);font-size:13px}
+  .summary .sl:last-child{border-bottom:0}
+  .summary .sl span{color:var(--ink-2)} .summary .sl b{font-variant-numeric:tabular-nums}
+  .summary .act{padding:14px 17px;border-top:1px solid var(--line-2);display:flex;flex-direction:column;gap:9px}
+  .btn{border:0;border-radius:8px;padding:11px 14px;font-size:13.5px;font-weight:650;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+  .btn.primary{background:var(--brand);color:#fff}
+  .btn.primary:hover{background:var(--brand-ink)}
+  .btn.ghost{background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line)}
+  .btn.ghost:hover{background:#fff;border-color:var(--muted)}
+  .btn:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+  .flowline{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);padding:11px 16px;background:var(--brand-tint-2);border-bottom:1px solid var(--line-2)}
+  .flowline code{font-family:var(--mono);background:#fff;border:1px solid var(--line);padding:1px 6px;border-radius:5px;color:var(--ink-2);font-size:11.5px}
+
+  .empty{padding:40px;text-align:center;color:var(--muted)}
+
+  /* toast */
+  #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(40px);background:var(--ink);color:#fff;padding:12px 18px;border-radius:10px;font-size:13.5px;box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:.32s;z-index:50;display:flex;align-items:center;gap:10px;max-width:90vw}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast .ok{width:18px;height:18px;border-radius:50%;background:#3EC2A0;color:#06231b;display:grid;place-items:center;font-size:12px;flex:0 0 auto}
+
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <div class="mark">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 8.5 12 13l9-4.5M12 13v7" stroke="#9FE7EC" stroke-width="1.4" stroke-linejoin="round"/></svg>
+      </div>
+      <div>
+        <b>Macgear 3PL</b>
+        <span>Logistics Portal</span>
+      </div>
+    </div>
+
+    <div class="ctx">
+      <label>Customer account</label>
+      <div class="sel">
+        <select id="custSel" onchange="setCustomer(this.value)">
+          <option value="mova">Mova — Melbourne 3PL</option>
+          <option value="skriva">Skriva — Auckland (NZ)</option>
+        </select>
+      </div>
+    </div>
+
+    <nav id="nav"></nav>
+
+    <div class="foot"><span class="dot"></span> NetSuite · synced 6 min ago</div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <div>
+        <h1 id="pageTitle">Overview</h1>
+        <div class="sub" id="pageSub">Live snapshot of your stock and charges</div>
+      </div>
+      <div class="spacer"></div>
+      <div class="weekpick">Billing week <b>21–27 Jul 2026</b></div>
+      <span class="pill ns">● NetSuite connected</span>
+    </div>
+
+    <div class="ribbon">
+      <b>Prototype</b> · Dummy data for review — not yet wired to NetSuite. Numbers illustrate the rate card &amp; automation only.
+    </div>
+
+    <div class="view" id="view"></div>
+  </main>
+</div>
+
+<div id="toast"><span class="ok">✓</span><span id="toastMsg"></span></div>
+
+<script>
+/* ============================ DUMMY DATA ============================ */
+const DATA = {
+  mova:{
+    label:"Mova", location:"3PL Warehouse · Melbourne", brand:"Mova 3PL",
+    items:[
+      {sku:"MOVA-V50-ULTRA", name:"Mova V50 Ultra Robot Vacuum", perPallet:24, onHand:6216},
+      {sku:"MOVA-P10-PRO",   name:"Mova P10 Pro Robot Vacuum",   perPallet:30, onHand:5430},
+      {sku:"MOVA-S20",       name:"Mova S20 Robot Vacuum",       perPallet:36, onHand:4104},
+      {sku:"MOVA-Z70-MOP",   name:"Mova Z70 Robot Mop",          perPallet:28, onHand:2828},
+    ],
+    openPOs:[
+      {po:"PO-30418", item:"MOVA-V50-ULTRA", qty:4800, value:0, eta:"2026-07-30", status:"In transit", containers:2},
+      {po:"PO-30419", item:"MOVA-P10-PRO",   qty:3600, value:0, eta:"2026-08-06", status:"In transit", containers:1},
+      {po:"PO-30425", item:"MOVA-S20",       qty:2880, value:0, eta:"2026-08-14", status:"Open",        containers:1},
+    ],
+    inbound:[
+      {ship:"INB-MOVA-0007", container:"MSKU 745 1129", type:"40ft loose", po:"PO-30410", units:1200, arrived:"2026-07-22", status:"Received"},
+      {ship:"INB-MOVA-0008", container:"TCLU 880 4471", type:"40ft loose", po:"PO-30418", units:2400, arrived:"2026-07-30", status:"In transit"},
+      {ship:"INB-MOVA-0009", container:"MRKU 233 9087", type:"40ft loose", po:"PO-30418", units:2400, arrived:"2026-08-01", status:"In transit"},
+    ],
+    receipts:[
+      {rcpt:"IR-50231", ship:"INB-MOVA-0007", item:"MOVA-V50-ULTRA", qty:1200, date:"2026-07-22", loc:"3PL Warehouse"},
+      {rcpt:"IR-50198", ship:"INB-MOVA-0006", item:"MOVA-P10-PRO",   qty:2100, date:"2026-07-15", loc:"3PL Warehouse"},
+      {rcpt:"IR-50140", ship:"INB-MOVA-0005", item:"MOVA-S20",       qty:1800, date:"2026-07-08", loc:"3PL Warehouse"},
+      {rcpt:"IR-50088", ship:"INB-MOVA-0004", item:"MOVA-Z70-MOP",   qty:1400, date:"2026-07-01", loc:"3PL Warehouse"},
+    ],
+    fulfilments:[
+      {ff:"IF-77412", type:"SO",   ref:"SO-90231", item:"MOVA-V50-ULTRA", qty:320, to:"The Good Guys (DC)",    date:"2026-07-23", status:"Shipped"},
+      {ff:"IF-77419", type:"SO",   ref:"SO-90244", item:"MOVA-P10-PRO",   qty:220, to:"JB Hi-Fi (Vic DC)",     date:"2026-07-24", status:"Shipped"},
+      {ff:"IF-77433", type:"VRMA", ref:"VRMA-1180",item:"MOVA-S20",       qty:200, to:"Macgear Melbourne (transfer)", date:"2026-07-25", status:"Shipped"},
+      {ff:"IF-77450", type:"SO",   ref:"SO-90261", item:"MOVA-Z70-MOP",   qty:140, to:"Amazon AU (FBA)",       date:"2026-07-26", status:"Picking"},
+    ],
+    invoices:[
+      {inv:"INV-3PL-0042", period:"14–20 Jul 2026", amount:8740.00, status:"Paid",    due:"2026-08-03"},
+      {inv:"INV-3PL-0041", period:"07–13 Jul 2026", amount:7195.50, status:"Paid",    due:"2026-07-27"},
+      {inv:"INV-3PL-0040", period:"30 Jun–06 Jul",  amount:6310.00, status:"Overdue", due:"2026-07-20"},
+    ],
+    rateCard:[
+      {name:"Container unload — 40ft (unpalletised, loose stacked)", rate:1500, per:"per container", desc:"Stock is loose stacked and requires manual unloading from the container. Covers labour and supplying pallets."},
+      {name:"Putaway fee", rate:1.00, per:"per unit", desc:"Covers putaway, receipting and serialisation of each unit into the 3PL location."},
+      {name:"Storage", rate:4.50, per:"per pallet / week", desc:"Charged on pallets on hand in the 3PL warehouse, calculated as units on hand ÷ units per pallet."},
+      {name:"Picking fee", rate:1.00, per:"per unit", desc:"Covers internal stock transfer, system movement and serialisation on dispatch (sales orders and VRMA transfers)."},
+      {name:"Shipping", rate:null, per:"as per shipping rate card", desc:"Outbound freight billed per the agreed shipping rate card by carrier, zone and weight."},
+    ],
+    // weekly billing run inputs (week of 21–27 Jul)
+    billing:{
+      containers:1, putawayUnits:1200, pallets:null, pickUnits:740, shipping:3420.00
+    },
+    history:[6.31,7.20,8.74,9.80] // $k by week, last = current
+  },
+  skriva:{
+    label:"Skriva", location:"Auckland warehouse (no separate 3PL location)", brand:"Skriva 3PL",
+    items:[
+      {sku:"S-STYCASE-WHITE", name:"Skriva Styling Case — White", perPallet:48, onHand:1344},
+    ],
+    openPOs:[
+      {po:"PO-NZ-2207", item:"S-STYCASE-WHITE", qty:960, value:0, eta:"2026-08-05", status:"Open", containers:1},
+    ],
+    inbound:[
+      {ship:"INB-SKR-0003", container:"OOLU 551 2210", type:"40ft palletised", po:"PO-NZ-2204", units:960, arrived:"2026-07-18", status:"Received"},
+    ],
+    receipts:[
+      {rcpt:"IR-NZ-3021", ship:"INB-SKR-0003", item:"S-STYCASE-WHITE", qty:960, date:"2026-07-18", loc:"Auckland"},
+    ],
+    fulfilments:[
+      {ff:"IF-NZ-8810", type:"SO", ref:"SO-NZ-5521", item:"S-STYCASE-WHITE", qty:120, to:"Farmers (Auckland)", date:"2026-07-24", status:"Shipped"},
+    ],
+    invoices:[
+      {inv:"INV-3PL-NZ-018", period:"14–20 Jul 2026", amount:642.00, status:"Paid", due:"2026-08-03"},
+    ],
+    rateCard:[
+      {name:"Putaway fee", rate:0.80, per:"per unit", desc:"Receipting and putaway into the Auckland warehouse."},
+      {name:"Storage", rate:3.20, per:"per pallet / week", desc:"Pallets on hand, units on hand ÷ units per pallet."},
+      {name:"Picking fee", rate:0.80, per:"per unit", desc:"Per-unit pick and dispatch fee."},
+      {name:"Shipping", rate:null, per:"as per shipping rate card", desc:"Outbound freight per agreed NZ rate card."},
+    ],
+    billing:{containers:0, putawayUnits:0, pallets:null, pickUnits:120, shipping:180.00},
+    history:[0.51,0.58,0.64,0.69]
+  }
+};
+
+/* ============================ HELPERS ============================ */
+let CUR="mova";
+const $=s=>document.querySelector(s);
+const money=n=>"$"+n.toLocaleString("en-AU",{minimumFractionDigits:2,maximumFractionDigits:2});
+const money0=n=>"$"+Math.round(n).toLocaleString("en-AU");
+const k=n=>"$"+n.toLocaleString("en-AU");
+const num=n=>n.toLocaleString("en-AU");
+const ceil=(a,b)=>Math.ceil(a/b);
+const dt=s=>{const[y,m,d]=s.split("-");return d?`${d} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+m-1]}`:s};
+
+function pallets(d){return d.items.reduce((t,i)=>t+ceil(i.onHand,i.perPallet),0);}
+function unitsOnHand(d){return d.items.reduce((t,i)=>t+i.onHand,0);}
+function openPOUnits(d){return d.openPOs.reduce((t,p)=>t+p.qty,0);}
+function rate(d,name){const r=d.rateCard.find(x=>x.name.toLowerCase().startsWith(name));return r?r.rate:0;}
+
+function statusChip(s){
+  const m={"Received":"c-good","Shipped":"c-good","Paid":"c-good","Open":"c-info","In transit":"c-info","Picking":"c-warn","Overdue":"c-crit"};
+  return `<span class="chip ${m[s]||'c-neutral'}">${s}</span>`;
+}
+
+/* ============================ NAV ============================ */
+const NAV=[
+  {grp:"Visibility",items:[
+    {id:"overview",  label:"Overview",       ic:"grid"},
+    {id:"onorder",   label:"Stock on order", ic:"truck", count:d=>d.openPOs.length},
+    {id:"receipts",  label:"Item receipts",  ic:"in",    count:d=>d.receipts.length},
+    {id:"onhand",    label:"Stock on hand",  ic:"box",   count:d=>d.items.length},
+    {id:"fulfil",    label:"Fulfilments",    ic:"out",   count:d=>d.fulfilments.length},
+    {id:"invoices",  label:"Invoices",       ic:"doc",   count:d=>d.invoices.length},
+  ]},
+  {grp:"Account",items:[
+    {id:"ratecard",  label:"Rate card",      ic:"tag"},
+  ]},
+  {grp:"Macgear internal",items:[
+    {id:"billing",   label:"Billing run",    ic:"calc", admin:true},
+  ]},
+];
+const ICONS={
+  grid:'<path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" stroke="currentColor" stroke-width="1.6"/>',
+  truck:'<path d="M2 6h11v9H2zM13 9h4l3 3v3h-7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="6" cy="17" r="1.6" stroke="currentColor" stroke-width="1.5"/><circle cx="17" cy="17" r="1.6" stroke="currentColor" stroke-width="1.5"/>',
+  in:'<path d="M12 3v9m0 0 4-4m-4 4-4-4M4 16v4h16v-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+  out:'<path d="M12 13V4m0 0 4 4m-4-4-4 4M4 16v4h16v-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+  box:'<path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 7.5 12 12l9-4.5M12 12v9" stroke="currentColor" stroke-width="1.3"/>',
+  doc:'<path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 3v4h4M9 13h6M9 17h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
+  tag:'<path d="M4 4h7l9 9-7 7-9-9z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/>',
+  calc:'<rect x="5" y="3" width="14" height="18" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 7h8M8 11h2M12 11h4M8 15h2M8 18h2M14 14v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+};
+let ACTIVE="overview";
+
+function renderNav(){
+  const d=DATA[CUR];
+  $("#nav").innerHTML=NAV.map(g=>`
+    <div class="navgrp"><h6>${g.grp}</h6>${g.items.map(it=>{
+      const c=it.count?it.count(d):null;
+      return `<button class="navitem ${it.admin?'admin':''} ${it.id===ACTIVE?'active':''}" onclick="go('${it.id}')">
+        <svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none">${ICONS[it.ic]}</svg>
+        <span>${it.label}</span>${c!=null?`<span class="badge num">${c}</span>`:""}
+      </button>`;
+    }).join("")}</div>`).join("");
+}
+
+const TITLES={
+  overview:["Overview","Live snapshot of your stock and charges"],
+  onorder:["Stock on order","Open purchase orders inbound to the 3PL warehouse"],
+  receipts:["Item receipts","Stock received and putaway into the 3PL location"],
+  onhand:["Stock on hand","Current inventory held on your behalf"],
+  fulfil:["Fulfilments","Outbound dispatches — sales orders and VRMA transfers"],
+  invoices:["Invoices","3PL service charges billed to your account"],
+  ratecard:["Rate card","Agreed 3PL handling and storage rates"],
+  billing:["Weekly billing run","Automated charge calculation from NetSuite — Macgear internal"],
+};
+
+function go(id){ACTIVE=id;renderNav();const[t,s]=TITLES[id];$("#pageTitle").textContent=t;$("#pageSub").textContent=s;$("#view").innerHTML=VIEWS[id](DATA[CUR]);window.scrollTo(0,0);}
+function setCustomer(c){CUR=c;ACTIVE=(ACTIVE==="onhand"||VIEWS[ACTIVE])?ACTIVE:"overview";renderNav();go(ACTIVE);}
+
+/* ============================ VIEWS ============================ */
+function tableCard(title,hint,head,rows,foot){
+  return `<div class="card"><header><h3>${title}</h3>${hint?`<span class="hint">${hint}</span>`:""}</header>
+    <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${rows||`<tr><td class="empty" colspan="9">No records</td></tr>`}</tbody>${foot||""}</table></div></div>`;
+}
+
+const VIEWS={
+  overview:d=>{
+    const uoh=unitsOnHand(d),pal=pallets(d),poU=openPOUnits(d);
+    const b=d.billing; b.pallets=pal;
+    const storage=pal*rate(d,"storage"), putaway=b.putawayUnits*rate(d,"putaway"),
+          pick=b.pickUnits*rate(d,"picking"), cont=b.containers*rate(d,"container"),
+          weekTotal=storage+putaway+pick+cont+b.shipping;
+    const max=Math.max(...d.history);
+    const wk=["30 Jun","07 Jul","14 Jul","21 Jul"];
+    return `
+    <div class="kpis">
+      <div class="kpi k-stock"><div class="rail"></div><div class="lab">Units on hand</div><div class="val num">${num(uoh)}</div><div class="meta">${d.items.length} SKUs · ${d.brand}</div></div>
+      <div class="kpi k-pallet"><div class="rail"></div><div class="lab">Pallets stored</div><div class="val num">${num(pal)}</div><div class="meta">${money(rate(d,"storage"))}/pallet/wk → <b>${money(storage)}</b>/wk</div></div>
+      <div class="kpi k-order"><div class="rail"></div><div class="lab">Units on order</div><div class="val num">${num(poU)}</div><div class="meta">${d.openPOs.length} open PO${d.openPOs.length>1?"s":""} inbound</div></div>
+      <div class="kpi k-bill"><div class="rail"></div><div class="lab">Charges this week</div><div class="val num">${money0(weekTotal)}</div><div class="meta"><span class="up">▲ ${Math.round((d.history[3]/d.history[2]-1)*100)}%</span> vs last week</div></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><header><h3>Weekly 3PL charges</h3><span class="hint">last 4 billing weeks ($k)</span></header>
+        <div class="chart"><div class="bars">${d.history.map((v,i)=>`
+          <div class="bar ${i===3?'cur':''}"><span class="vl">${k(v)}k</span><div class="fill" style="height:${Math.round(v/max*100)}%"></div><span class="lb">${wk[i]}</span></div>`).join("")}</div></div>
+      </div>
+      <div class="card"><header><h3>This week so far</h3></header>
+        <div class="pad" style="display:flex;flex-direction:column;gap:11px">
+          ${[["Containers unloaded",b.containers,money(cont)],["Units putaway",num(b.putawayUnits),money(putaway)],["Pallets in storage",num(pal),money(storage)],["Units picked",num(b.pickUnits),money(pick)],["Shipping"," ",money(b.shipping)]].map(r=>`
+            <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:13px;border-bottom:1px solid var(--line-2);padding-bottom:9px">
+              <span style="color:var(--ink-2)">${r[0]} <b class="num" style="color:var(--muted)">${r[1]}</b></span><b class="num">${r[2]}</b></div>`).join("")}
+          <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:15px;font-weight:700;padding-top:2px">
+            <span>Projected invoice</span><span class="num" style="color:var(--brand)">${money(weekTotal)}</span></div>
+        </div>
+      </div>
+    </div>
+    ${tableCard("Recent activity","","<th>Reference</th><th>Type</th><th>Item</th><th class='r'>Qty</th><th>Date</th><th>Status</th>",
+      [...d.receipts.slice(0,2).map(r=>["Receipt",r.rcpt,"Inbound",r.item,r.qty,r.date,"Received"]),
+       ...d.fulfilments.slice(0,3).map(f=>["Fulfil",f.ff,f.type,f.item,f.qty,f.date,f.status])]
+       .map(r=>`<tr><td><span class="id">${r[1]}</span></td><td>${r[2]==="SO"?'<span class="tag so">SO</span>':r[2]==="VRMA"?'<span class="tag vrma">VRMA</span>':r[2]}</td><td class="prim">${r[3]}</td><td class="r num">${num(r[4])}</td><td>${dt(r[5])}</td><td>${statusChip(r[6])}</td></tr>`).join(""))}
+    `;
+  },
+
+  onorder:d=>tableCard("Open purchase orders","keyed at $0 — Mova retains ownership",
+    "<th>PO</th><th>Item</th><th class='r'>Qty ordered</th><th class='r'>Containers</th><th class='r'>PO value</th><th>ETA</th><th>Status</th>",
+    d.openPOs.map(p=>`<tr><td><span class="id">${p.po}</span></td><td class="prim">${p.item}</td><td class="r num">${num(p.qty)}</td><td class="r num">${p.containers}</td><td class="r num">${money(p.value)}</td><td>${dt(p.eta)}</td><td>${statusChip(p.status)}</td></tr>`).join(""),
+    `<tfoot><tr><td colspan="2">${d.openPOs.length} open</td><td class="r">${num(openPOUnits(d))}</td><td class="r">${d.openPOs.reduce((t,p)=>t+p.containers,0)}</td><td class="r">${money(0)}</td><td colspan="2"></td></tr></tfoot>`),
+
+  receipts:d=>tableCard("Item receipts","item receipts against 3PL location · brand "+d.brand,
+    "<th>Receipt</th><th>Inbound shipment</th><th>Item</th><th class='r'>Qty</th><th>Location</th><th>Date</th>",
+    d.receipts.map(r=>`<tr><td><span class="id">${r.rcpt}</span></td><td><span class="id">${r.ship}</span></td><td class="prim">${r.item}</td><td class="r num">${num(r.qty)}</td><td>${r.loc}</td><td>${dt(r.date)}</td></tr>`).join(""),
+    `<tfoot><tr><td colspan="3">${d.receipts.length} receipts</td><td class="r">${num(d.receipts.reduce((t,r)=>t+r.qty,0))}</td><td colspan="2"></td></tr></tfoot>`),
+
+  onhand:d=>tableCard("Stock on hand",d.location,
+    "<th>SKU</th><th>Description</th><th class='r'>On hand</th><th class='r'>Units / pallet</th><th class='r'>Pallets</th><th class='r'>Storage / wk</th>",
+    d.items.map(i=>{const p=ceil(i.onHand,i.perPallet);return `<tr><td><span class="id">${i.sku}</span></td><td class="prim">${i.name}</td><td class="r num">${num(i.onHand)}</td><td class="r num">${i.perPallet}</td><td class="r num">${p}</td><td class="r num">${money(p*rate(d,"storage"))}</td></tr>`}).join(""),
+    `<tfoot><tr><td colspan="2">${d.items.length} SKUs</td><td class="r">${num(unitsOnHand(d))}</td><td></td><td class="r">${num(pallets(d))}</td><td class="r">${money(pallets(d)*rate(d,"storage"))}</td></tr></tfoot>`),
+
+  fulfil:d=>tableCard("Fulfilments","sales orders + VRMA transfers · drives per-unit pick fee",
+    "<th>Fulfilment</th><th>Type</th><th>Reference</th><th>Item</th><th class='r'>Qty</th><th>Ship to</th><th>Date</th><th>Status</th>",
+    d.fulfilments.map(f=>`<tr><td><span class="id">${f.ff}</span></td><td>${f.type==="SO"?'<span class="tag so">SO</span>':'<span class="tag vrma">VRMA</span>'}</td><td><span class="id">${f.ref}</span></td><td class="prim">${f.item}</td><td class="r num">${num(f.qty)}</td><td>${f.to}</td><td>${dt(f.date)}</td><td>${statusChip(f.status)}</td></tr>`).join(""),
+    `<tfoot><tr><td colspan="4">${d.fulfilments.length} fulfilments</td><td class="r">${num(d.fulfilments.reduce((t,f)=>t+f.qty,0))}</td><td colspan="3"></td></tr></tfoot>`),
+
+  invoices:d=>tableCard("Invoices","3PL service charges on your account",
+    "<th>Invoice</th><th>Billing period</th><th class='r'>Amount</th><th>Due</th><th>Status</th><th></th>",
+    d.invoices.map(v=>`<tr><td><span class="id">${v.inv}</span></td><td>${v.period}</td><td class="r num">${money(v.amount)}</td><td>${dt(v.due)}</td><td>${statusChip(v.status)}</td><td class="r"><button class="btn ghost" style="padding:5px 11px;font-size:12px" onclick="toast('Opening ${v.inv} (PDF placeholder)')">View</button></td></tr>`).join(""),
+    `<tfoot><tr><td colspan="2">${d.invoices.length} invoices</td><td class="r">${money(d.invoices.reduce((t,v)=>t+v.amount,0))}</td><td colspan="3"></td></tr></tfoot>`),
+
+  ratecard:d=>`<div class="card"><header><h3>${d.label} — 3PL rate card</h3><span class="hint">${d.location}</span></header>
+    <div class="rate">${d.rateCard.map(r=>`
+      <div class="rate-row"><div class="rl"><b>${r.name}</b><p>${r.desc}</p></div>
+        <div class="rr"><div class="amt num">${r.rate==null?"—":money(r.rate)}</div><span class="per">${r.per}</span></div></div>`).join("")}</div></div>`,
+
+  billing:d=>{
+    const pal=pallets(d),b=d.billing;b.pallets=pal;
+    const lines=[
+      {name:"Container unload (40ft loose)", src:"Inbound shipments received this week", qty:b.containers, rate:rate(d,"container"), unit:"container"},
+      {name:"Putaway", src:"Item receipts · 3PL location · brand "+d.brand, qty:b.putawayUnits, rate:rate(d,"putaway"), unit:"unit"},
+      {name:"Storage", src:"Units on hand ÷ units per pallet", qty:pal, rate:rate(d,"storage"), unit:"pallet"},
+      {name:"Picking", src:"Item fulfilments (SO + VRMA) this week", qty:b.pickUnits, rate:rate(d,"picking"), unit:"unit"},
+    ];
+    const sub=lines.reduce((t,l)=>t+l.qty*l.rate,0), total=sub+b.shipping;
+    return `
+    <div class="flowline">Automated weekly run &nbsp;·&nbsp; <code>SuiteQL</code> → <code>rate card</code> → <code>draft invoice</code> on ${d.label} customer record &nbsp;·&nbsp; replaces 5 manual saved searches</div>
+    <div class="billgrid">
+      <div class="card">
+        <div class="tablewrap"><table>
+          <thead><tr><th>Charge</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead>
+          <tbody>${lines.map(l=>`<tr class="bill-line"><td><div class="prim">${l.name}</div><span class="src">${l.src}</span></td><td class="r num">${num(l.qty)}</td><td class="r num">${money(l.rate)}<span class="sub2">/${l.unit}</span></td><td class="r num"><b>${money(l.qty*l.rate)}</b></td></tr>`).join("")}
+            <tr class="bill-line"><td><div class="prim">Shipping</div><span class="src">Outbound freight · per shipping rate card</span></td><td class="r num">—</td><td class="r"><span class="sub2">rate card</span></td><td class="r num"><b>${money(b.shipping)}</b></td></tr>
+          </tbody>
+          <tfoot><tr><td colspan="3">Invoice total (ex GST)</td><td class="r">${money(total)}</td></tr></tfoot>
+        </table></div>
+      </div>
+      <div class="summary">
+        <header><div class="lab">Draft invoice · week 21–27 Jul</div><div class="tot num">${money(total)}</div><div class="for">${d.label} customer record</div></header>
+        <div class="lines">
+          ${lines.map(l=>`<div class="sl"><span>${l.name}</span><b class="num">${money(l.qty*l.rate)}</b></div>`).join("")}
+          <div class="sl"><span>Shipping</span><b class="num">${money(b.shipping)}</b></div>
+        </div>
+        <div class="act">
+          <button class="btn primary" onclick="toast('Draft invoice ${money(total)} pushed to NetSuite · awaiting approval')">Push draft invoice to NetSuite</button>
+          <button class="btn ghost" onclick="toast('Billing run exported to CSV')">Export breakdown (CSV)</button>
+        </div>
+      </div>
+    </div>`;
+  },
+};
+
+/* ============================ TOAST ============================ */
+let tHide;
+function toast(msg){$("#toastMsg").textContent=msg;$("#toast").classList.add("show");clearTimeout(tHide);tHide=setTimeout(()=>$("#toast").classList.remove("show"),2600);}
+
+/* ============================ INIT ============================ */
+renderNav();go("overview");
+</script>

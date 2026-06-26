@@ -1,0 +1,15 @@
+{% extends "admin_base.html" %}
+{% set heading = "Customers" %}
+{% block admin %}
+<div class="a-head"><h1>Customers &amp; rate cards</h1></div>
+<div class="card"><div class="tablewrap"><table>
+  <thead><tr><th>Customer</th><th>Brand (class)</th><th>3PL location</th><th>NetSuite cust.</th><th></th></tr></thead>
+  <tbody>{% for c in customers %}<tr>
+    <td class="prim">{{ c.name }}</td>
+    <td>{{ c.brand_label or '—' }} <span class="sub2">({{ c.ns_class_id or '?' }})</span></td>
+    <td>{{ c.location_label or '—' }}</td>
+    <td><span class="id">{{ c.ns_customer_id }}</span></td>
+    <td class="r"><a class="link" href="/admin/customers/{{ c.id }}">Edit &amp; rates</a></td>
+  </tr>{% endfor %}</tbody>
+</table></div></div>
+{% endblock %}
