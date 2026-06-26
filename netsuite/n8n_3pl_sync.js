@@ -22,13 +22,9 @@ const APP_BASE        = 'http://threepl:8000';       // app on the shared Docker
 const SYNC_TOKEN      = 'REPLACE_SYNC_TOKEN';        // == SYNC_TOKEN in /opt/threepl/3PL-Portal/.env on the droplet
 const SINCE           = '2025-01-01';                // incremental floor for dated reads
 
-// Customers to sync (NetSuite internal ids; sandbox-confirmed 2026-06-26).
-const CUSTOMERS = [
-  { slug: 'skriva', ns_customer_id: '10496', ns_supplier_id: '10503',
-    ns_location_id: '2', ns_class_id: '236', ns_subsidiary_id: '3' },
-  { slug: 'mova', ns_customer_id: '11030', ns_supplier_id: '10872',
-    ns_location_id: '49', ns_class_id: '253', ns_subsidiary_id: '2' },  // returns empty until stock arrives (~end Jul)
-];
+// Customers to sync are NOT hardcoded here — they're fetched from the app's
+// /admin/sync-config (managed in the admin console: Customers > + Add customer).
+// Add/edit a customer there and the next run picks it up; no node edit needed.
 const READ_ENTITIES = ['items', 'invoices', 'purchase_orders', 'item_receipts',
                        'item_fulfilments', 'stock_on_hand'];
 // charge_type -> NetSuite item internalid (for draft-invoice lines on push). Sandbox items.
@@ -78,6 +74,13 @@ async function restlet(body) {
 
 const appHeaders = { 'X-Sync-Token': SYNC_TOKEN, 'Content-Type': 'application/json' };
 const out = [];
+
+// Customer list (NetSuite ids per customer) comes from the app, so adding a customer
+// in the admin console is all it takes to start syncing them. Only customers with a
+// brand class are returned (the reads are class-scoped).
+const cfg = await helpers.httpRequest({
+  method: 'GET', url: `${APP_BASE}/admin/sync-config`, headers: appHeaders, json: true });
+const CUSTOMERS = cfg.customers || [];
 
 // 1) READS: pull each entity per customer and push to /admin/ingest
 for (const c of CUSTOMERS) {

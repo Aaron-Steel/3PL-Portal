@@ -1,27 +1,43 @@
 {% extends "admin_base.html" %}
 {% set heading = "Customer" %}
 {% block admin %}
-<div class="a-head"><h1>{{ c.name }}</h1><a class="link" href="/admin/customers">← All customers</a></div>
+<div class="a-head">
+  <h1>{% if is_new %}New customer{% else %}{{ c.name }}{% endif %}</h1>
+  <a class="link" href="/admin/customers">← All customers</a>
+</div>
 {% if request.query_params.get('saved') %}<div class="savedbar">✓ Saved.</div>{% endif %}
+{% if error %}<div class="savedbar" style="background:#fdecec;color:#a12626">⚠ {{ error }}</div>{% endif %}
 
-<form class="card formcard" method="post" action="/admin/customers/{{ c.id }}">
+<form class="card formcard" method="post"
+      action="{% if is_new %}/admin/customers/new{% else %}/admin/customers/{{ c.id }}{% endif %}">
   <h3 class="fsec">Account</h3>
   <div class="frow">
-    <label class="f">Name<input name="name" value="{{ c.name }}"></label>
-    <label class="f">Brand label<input name="brand_label" value="{{ c.brand_label or '' }}"></label>
+    <label class="f">Name<input name="name" value="{{ c.name or '' }}"></label>
+    {% if is_new %}
+    <label class="f">Slug (URL key, e.g. <span class="id">mova</span>)<input name="slug" value="{{ c.slug or '' }}"></label>
+    {% else %}
+    <label class="f">Slug<input value="{{ c.slug }}" disabled><span class="sub2">URL key — not editable</span></label>
+    {% endif %}
   </div>
-  <label class="f">Location label<input name="location_label" value="{{ c.location_label or '' }}"></label>
   <div class="frow">
-    <label class="f">NetSuite customer id<input name="ns_customer_id" value="{{ c.ns_customer_id }}"></label>
-    <label class="f">NetSuite supplier id<input name="ns_supplier_id" value="{{ c.ns_supplier_id or '' }}"></label>
+    <label class="f">Brand label<input name="brand_label" value="{{ c.brand_label or '' }}"></label>
+    <label class="f">Location label<input name="location_label" value="{{ c.location_label or '' }}"></label>
+  </div>
+
+  <h3 class="fsec">NetSuite ids</h3>
+  <div class="frow">
+    <label class="f">Customer id<input name="ns_customer_id" value="{{ c.ns_customer_id or '' }}"></label>
+    <label class="f">Supplier id<input name="ns_supplier_id" value="{{ c.ns_supplier_id or '' }}"></label>
   </div>
   <div class="frow">
     <label class="f">3PL location id<input name="ns_location_id" value="{{ c.ns_location_id or '' }}"></label>
     <label class="f">Brand class id<input name="ns_class_id" value="{{ c.ns_class_id or '' }}"></label>
   </div>
+  <label class="f">Subsidiary id<input name="ns_subsidiary_id" value="{{ c.ns_subsidiary_id or '' }}"></label>
+  <p class="sub2" style="margin:6px 0 0">Brand class id is required for the sync to pull this customer's data. Subsidiary id is needed for draft invoices.</p>
 
   <h3 class="fsec">Rate card</h3>
-  <p class="sub2" style="margin:0 0 12px">Changing a rate creates a new effective-dated version (from today); past billing runs keep their original rates.</p>
+  <p class="sub2" style="margin:0 0 12px">{% if is_new %}Sets the customer's first rate card (effective today).{% else %}Changing a rate creates a new effective-dated version (from today); past billing runs keep their original rates.{% endif %}</p>
   <div class="tablewrap"><table>
     <thead><tr><th>Charge</th><th>Basis</th><th class="r" style="width:160px">Rate ($)</th></tr></thead>
     <tbody>{% for ch in charges %}<tr>
@@ -30,6 +46,6 @@
     </tr>{% endfor %}</tbody>
   </table></div>
 
-  <div class="formact"><button class="btn primary" type="submit">Save</button></div>
+  <div class="formact"><button class="btn primary" type="submit">{% if is_new %}Create customer{% else %}Save{% endif %}</button></div>
 </form>
 {% endblock %}

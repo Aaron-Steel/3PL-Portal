@@ -85,7 +85,7 @@ APP_SECRET = os.environ.get("APP_SECRET", "") or "dev-insecure-secret-change-me"
 SYNC_TOKEN = os.environ.get("SYNC_TOKEN", "")
 COOKIE_NAME = "threepl_session"
 # token-authed server-to-server endpoints (n8n) bypass the login cookie
-_EXEMPT_EXACT = {"/login", "/logout", "/admin/ingest",
+_EXEMPT_EXACT = {"/login", "/logout", "/admin/ingest", "/admin/sync-config",
                  "/admin/billing/pending", "/admin/billing/pushed"}
 
 
@@ -405,6 +405,80 @@ def admin_customers(request: Request, db: Session = Depends(get_db)):
                                       {"section": "customers", "customers": _customers(db)})
 
 
+def _safe_rate(raw) -> float:
+    try:
+        return round(float(raw), 2)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _blank_charges():
+    return [{"charge_type": ct, "label": lbl, "basis": b, "rate": 0.0}
+            for ct, lbl, b in DEFAULT_CHARGES]
+
+
+@app.get("/admin/customers/new", response_class=HTMLResponse)
+def admin_customer_new(request: Request, db: Session = Depends(get_db)):
+    if (r := _deny_non_admin(request)):
+        return r
+    return templates.TemplateResponse(request, "admin_customer_form.html",
+                                      {"section": "customers", "c": Customer(),
+                                       "charges": _blank_charges(), "is_new": True, "error": ""})
+
+
+@app.post("/admin/customers/new", response_class=HTMLResponse)
+async def admin_customer_create(request: Request, db: Session = Depends(get_db)):
+    if (r := _deny_non_admin(request)):
+        return r
+    form = await request.form()
+    slug = (form.get("slug", "") or "").strip().lower()
+    name = (form.get("name", "") or "").strip()
+    ns_customer_id = (form.get("ns_customer_id", "") or "").strip()
+
+    error = ""
+    if not slug or not all(ch.isalnum() or ch == "-" for ch in slug):
+        error = "Slug is required and may contain only lowercase letters, numbers and hyphens."
+    elif not name:
+        error = "Name is required."
+    elif not ns_customer_id:
+        error = "NetSuite customer id is required."
+    elif db.scalar(select(Customer).where(Customer.slug == slug)):
+        error = f"Slug '{slug}' is already taken."
+    if error:
+        # re-render with what they typed so nothing is lost
+        c = Customer(slug=slug, name=name, ns_customer_id=ns_customer_id,
+                     ns_supplier_id=form.get("ns_supplier_id", "").strip() or None,
+                     ns_location_id=form.get("ns_location_id", "").strip() or None,
+                     ns_class_id=form.get("ns_class_id", "").strip() or None,
+                     ns_subsidiary_id=form.get("ns_subsidiary_id", "").strip() or None,
+                     brand_label=form.get("brand_label", "").strip() or None,
+                     location_label=form.get("location_label", "").strip() or None)
+        charges = [{**ch, "rate": _safe_rate(form.get(f"rate_{ch['charge_type']}"))}
+                   for ch in _blank_charges()]
+        return templates.TemplateResponse(request, "admin_customer_form.html",
+                                          {"section": "customers", "c": c, "charges": charges,
+                                           "is_new": True, "error": error}, status_code=400)
+
+    c = Customer(slug=slug, name=name, ns_customer_id=ns_customer_id,
+                 ns_supplier_id=form.get("ns_supplier_id", "").strip() or None,
+                 ns_location_id=form.get("ns_location_id", "").strip() or None,
+                 ns_class_id=form.get("ns_class_id", "").strip() or None,
+                 ns_subsidiary_id=form.get("ns_subsidiary_id", "").strip() or None,
+                 brand_label=form.get("brand_label", "").strip() or None,
+                 location_label=form.get("location_label", "").strip() or None)
+    db.add(c)
+    db.flush()
+    # seed an initial effective-dated rate card from the submitted rates (default 0)
+    card = RateCard(customer_id=c.id, effective_from=date.today())
+    db.add(card)
+    db.flush()
+    for ct, lbl, b in DEFAULT_CHARGES:
+        db.add(RateCardLine(rate_card_id=card.id, charge_type=ct, label=lbl,
+                            basis=b, rate=_safe_rate(form.get(f"rate_{ct}"))))
+    db.commit()
+    return RedirectResponse(f"/admin/customers/{c.id}?saved=1", status_code=303)
+
+
 @app.get("/admin/customers/{cust_id}", response_class=HTMLResponse)
 def admin_customer_form(cust_id: int, request: Request, db: Session = Depends(get_db)):
     if (r := _deny_non_admin(request)):
@@ -417,10 +491,10 @@ def admin_customer_form(cust_id: int, request: Request, db: Session = Depends(ge
         charges = [{"charge_type": l.charge_type, "label": l.label, "basis": l.basis,
                     "rate": float(l.rate)} for l in sorted(card.lines, key=lambda x: x.charge_type)]
     else:
-        charges = [{"charge_type": ct, "label": lbl, "basis": b, "rate": 0.0}
-                   for ct, lbl, b in DEFAULT_CHARGES]
+        charges = _blank_charges()
     return templates.TemplateResponse(request, "admin_customer_form.html",
-                                      {"section": "customers", "c": c, "charges": charges})
+                                      {"section": "customers", "c": c, "charges": charges,
+                                       "is_new": False, "error": ""})
 
 
 @app.post("/admin/customers/{cust_id}")
@@ -438,6 +512,7 @@ async def admin_customer_save(cust_id: int, request: Request, db: Session = Depe
     c.ns_supplier_id = form.get("ns_supplier_id", "").strip() or None
     c.ns_location_id = form.get("ns_location_id", "").strip() or None
     c.ns_class_id = form.get("ns_class_id", "").strip() or None
+    c.ns_subsidiary_id = form.get("ns_subsidiary_id", "").strip() or None
 
     # Rate-card edit: if any rate changed, create a NEW effective-dated card (today)
     # and close the previous one — so historical billing runs still reprice correctly.
@@ -482,6 +557,22 @@ async def admin_customer_save(cust_id: int, request: Request, db: Session = Depe
 
 # --- n8n integration endpoints (token-authed, server-to-server) --------------
 # The app never calls NetSuite. n8n signs TBA, calls the RESTlet, and uses these.
+@app.get("/admin/sync-config")
+def admin_sync_config(request: Request, db: Session = Depends(get_db)):
+    """The customer list the n8n sync loops over — so adding a customer in the admin
+    console (not editing the node) is all that's needed to start syncing it. Only
+    customers with a brand class are returned (the reads are class-scoped)."""
+    if not _token_ok(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    custs = db.scalars(select(Customer).where(Customer.active == True)  # noqa: E712
+                       .order_by(Customer.slug)).all()
+    return JSONResponse({"customers": [
+        {"slug": c.slug, "ns_customer_id": c.ns_customer_id, "ns_supplier_id": c.ns_supplier_id,
+         "ns_location_id": c.ns_location_id, "ns_class_id": c.ns_class_id,
+         "ns_subsidiary_id": c.ns_subsidiary_id}
+        for c in custs if c.ns_class_id]})
+
+
 @app.post("/admin/ingest")
 async def admin_ingest(request: Request, db: Session = Depends(get_db)):
     """Upsert rows fetched from NetSuite by n8n. Body: {customer: slug, entity, rows:[...]}.
