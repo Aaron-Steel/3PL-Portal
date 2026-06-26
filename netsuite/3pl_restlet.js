@@ -74,10 +74,13 @@ define(['N/query', 'N/record'], function (query, record) {
   }
 
   function itemReceipts(p) {
+    // Scope by the ITEM's brand class (reliably set on the item; a manually-keyed receipt line
+    // often has no class) so shared locations don't leak other customers' receipts.
     var flat = runSuiteQL(
       "SELECT t.id, t.tranid, t.trandate, tl.item, tl.quantity FROM transaction t " +
-      "JOIN transactionline tl ON tl.transaction=t.id WHERE t.type='ItemRcpt' AND tl.location=" +
-      Number(p.ns_location_id) + " AND tl.class=" + Number(p.ns_class_id) +
+      "JOIN transactionline tl ON tl.transaction=t.id JOIN item i ON i.id=tl.item " +
+      "WHERE t.type='ItemRcpt' AND tl.location=" + Number(p.ns_location_id) +
+      " AND i.class=" + Number(p.ns_class_id) +
       " AND tl.mainline='F' AND tl.taxline='F' AND t.trandate >= " + sinceExpr(p.since));
     return group(flat, 'id',
       function (r) { return { ns_receipt_id: String(r.id), tranid: r.tranid, trandate: r.trandate }; },
@@ -87,8 +90,9 @@ define(['N/query', 'N/record'], function (query, record) {
   function itemFulfilments(p) {
     var flat = runSuiteQL(
       "SELECT t.id, t.tranid, t.trandate, t.entity, tl.item, tl.quantity FROM transaction t " +
-      "JOIN transactionline tl ON tl.transaction=t.id WHERE t.type='ItemShip' AND t.entity IN (" +
-      Number(p.ns_customer_id) + "," + Number(p.ns_supplier_id) + ") AND tl.class=" +
+      "JOIN transactionline tl ON tl.transaction=t.id JOIN item i ON i.id=tl.item " +
+      "WHERE t.type='ItemShip' AND t.entity IN (" +
+      Number(p.ns_customer_id) + "," + Number(p.ns_supplier_id) + ") AND i.class=" +
       Number(p.ns_class_id) + " AND tl.mainline='F' AND tl.taxline='F' AND tl.quantity > 0 " +
       "AND t.trandate >= " + sinceExpr(p.since));
     var custId = String(p.ns_customer_id);
@@ -99,9 +103,13 @@ define(['N/query', 'N/record'], function (query, record) {
   }
 
   function stockOnHand(p) {
-    // inventorybalance returns multiple rows per item (per status/bin); sum to one net qty/item.
-    var flat = runSuiteQL("SELECT item, SUM(quantityonhand) qty FROM inventorybalance WHERE location=" +
-      Number(p.ns_location_id) + " GROUP BY item");
+    // inventorybalance has multiple rows per item (status/bin); sum to one net qty/item. Filter by
+    // the item's brand class so a shared location (e.g. Skriva @ Auckland) returns only this
+    // customer's stock, not the whole warehouse.
+    var flat = runSuiteQL(
+      "SELECT ib.item, SUM(ib.quantityonhand) qty FROM inventorybalance ib " +
+      "JOIN item i ON i.id=ib.item WHERE ib.location=" + Number(p.ns_location_id) +
+      " AND i.class=" + Number(p.ns_class_id) + " GROUP BY ib.item");
     return flat.map(function (r) { return { ns_item_id: String(r.item), qty_on_hand: r.qty }; });
   }
 
@@ -109,12 +117,14 @@ define(['N/query', 'N/record'], function (query, record) {
   // resolves fact rows' internal ids to these. units_per_pallet is a custom item field — pass its
   // field id in p.upp_field to include it (e.g. 'custitem_units_per_pallet'), else it stays null.
   function items(p) {
-    var cols = "id, itemid, displayname, salesdescription";
+    // itemid = SKU; displayname = the readable name shown in the portal (salesdescription is not a
+    // SuiteQL item column; description is usually null). units_per_pallet via optional custom field.
+    var cols = "id, itemid, displayname, description";
     if (p.upp_field) cols += ", " + String(p.upp_field).replace(/[^a-z0-9_]/gi, '') + " upp";
     var flat = runSuiteQL("SELECT " + cols + " FROM item WHERE class=" + Number(p.ns_class_id));
     return flat.map(function (r) {
       return { ns_item_id: String(r.id), sku: r.itemid,
-               description: r.displayname || r.salesdescription || null,
+               description: r.displayname || r.description || null,
                units_per_pallet: (r.upp === undefined ? null : r.upp) };
     });
   }
