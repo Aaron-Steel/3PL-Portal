@@ -159,7 +159,22 @@ define(['N/query', 'N/record'], function (query, record) {
     return { ns_invoice_id: String(id) };
   }
 
+  // TEMP diagnostic — staged counts to find why item_receipts returns 0. Remove after.
+  function debug(p) {
+    var cls = Number(p.ns_class_id);
+    var one = function (sql) { var r = runSuiteQL(sql); return r.length ? r[0].n : null; };
+    return {
+      class: cls,
+      items_in_class: one("SELECT COUNT(*) n FROM item WHERE class=" + cls),
+      total_itemrcpt: one("SELECT COUNT(*) n FROM transaction WHERE type='ItemRcpt'"),
+      rcpt_classjoin_all: one("SELECT COUNT(*) n FROM transaction t JOIN transactionline tl ON tl.transaction=t.id JOIN item i ON i.id=tl.item WHERE t.type='ItemRcpt' AND i.class=" + cls),
+      rcpt_classjoin_mainline: one("SELECT COUNT(*) n FROM transaction t JOIN transactionline tl ON tl.transaction=t.id JOIN item i ON i.id=tl.item WHERE t.type='ItemRcpt' AND i.class=" + cls + " AND tl.mainline='F' AND tl.taxline='F'"),
+      rcpt_lines_for_class_items: runSuiteQL("SELECT t.tranid, BUILTIN.DF(t.type) ty, tl.item, tl.mainline ml, tl.taxline tx, t.trandate FROM transaction t JOIN transactionline tl ON tl.transaction=t.id WHERE t.type='ItemRcpt' AND tl.item IN (SELECT id FROM item WHERE class=" + cls + ")")
+    };
+  }
+
   var ACTIONS = {
+    debug: debug,
     items: items,
     invoices: invoices, purchase_orders: purchaseOrders, item_receipts: itemReceipts,
     item_fulfilments: itemFulfilments, stock_on_hand: stockOnHand,
