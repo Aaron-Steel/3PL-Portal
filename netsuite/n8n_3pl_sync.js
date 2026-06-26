@@ -34,9 +34,8 @@ const READ_ENTITIES = ['items', 'invoices', 'purchase_orders', 'item_receipts',
 // charge_type -> NetSuite item internalid (for draft-invoice lines on push). Sandbox items.
 const CHARGE_ITEMS = { container_unload: '55070', putaway: '55071',
                        storage: '55072', picking_so: '55073', picking_vrma: '55074' };
-// units-per-pallet custom item field id (e.g. 'custitem_units_per_pallet'); blank = don't pull it.
-// Needed for storage pallet/charge calc. Leave '' until confirmed, then the items sync fills it.
-const UPP_FIELD = '';
+// units-per-pallet custom item field id; blank = don't pull it. Needed for storage pallet/charge calc.
+const UPP_FIELD = 'custitem_pallet_quantity';
 // --------------------------------------------------------------------------------------------
 
 const host = ACCOUNT_ID.toLowerCase().replace(/_/g, '-');
