@@ -62,11 +62,14 @@ define(['N/query', 'N/record'], function (query, record) {
   }
 
   function purchaseOrders(p) {
+    // Scope by vendor + the item's brand class (not line location — 3PL stock lives in sub-
+    // locations whose id the transaction line doesn't carry the way inventorybalance does).
     var flat = runSuiteQL(
       "SELECT t.id, t.tranid, t.trandate, BUILTIN.DF(t.status) status, tl.item, " +
       "tl.quantity ordered, tl.quantityshiprecv received FROM transaction t " +
-      "JOIN transactionline tl ON tl.transaction=t.id WHERE t.type='PurchOrd' AND t.entity=" +
-      Number(p.ns_supplier_id) + " AND tl.location=" + Number(p.ns_location_id) +
+      "JOIN transactionline tl ON tl.transaction=t.id JOIN item i ON i.id=tl.item " +
+      "WHERE t.type='PurchOrd' AND t.entity=" + Number(p.ns_supplier_id) +
+      " AND i.class=" + Number(p.ns_class_id) +
       " AND tl.mainline='F' AND tl.taxline='F' AND tl.quantityshiprecv < tl.quantity");
     return group(flat, 'id',
       function (r) { return { ns_po_id: String(r.id), tranid: r.tranid, trandate: r.trandate, status: r.status }; },
@@ -79,8 +82,7 @@ define(['N/query', 'N/record'], function (query, record) {
     var flat = runSuiteQL(
       "SELECT t.id, t.tranid, t.trandate, tl.item, tl.quantity FROM transaction t " +
       "JOIN transactionline tl ON tl.transaction=t.id JOIN item i ON i.id=tl.item " +
-      "WHERE t.type='ItemRcpt' AND tl.location=" + Number(p.ns_location_id) +
-      " AND i.class=" + Number(p.ns_class_id) +
+      "WHERE t.type='ItemRcpt' AND i.class=" + Number(p.ns_class_id) +
       " AND tl.mainline='F' AND tl.taxline='F' AND t.trandate >= " + sinceExpr(p.since));
     return group(flat, 'id',
       function (r) { return { ns_receipt_id: String(r.id), tranid: r.tranid, trandate: r.trandate }; },
