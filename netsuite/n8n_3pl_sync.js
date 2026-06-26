@@ -7,31 +7,34 @@
 
 const crypto = require('crypto');
 
-// ---------- fill these in (or use $env.* on the n8n container) ----------
-const ACCOUNT_ID      = 'REPLACE_ACCOUNT_ID';        // e.g. 1234567 or 1234567_SB1
+// ---------- CONFIG (sandbox). Only the 4 TBA secrets + SYNC_TOKEN are left to fill. ----------
+// To move to PRODUCTION, swap only the NetSuite-side values: ACCOUNT_ID (drop _SB1), the 4 TBA
+// secrets (prod integration+token), RESTLET_SCRIPT/DEPLOY (deploy the RESTlet in prod), and the
+// CHARGE_ITEMS ids (items created in prod will have different internalids). App side is unchanged.
+const ACCOUNT_ID      = '840974_SB1';                // node derives host 840974-sb1.restlets...; realm stays 840974_SB1
 const CONSUMER_KEY    = 'REPLACE_CONSUMER_KEY';
 const CONSUMER_SECRET = 'REPLACE_CONSUMER_SECRET';
 const TOKEN_ID        = 'REPLACE_TOKEN_ID';
 const TOKEN_SECRET    = 'REPLACE_TOKEN_SECRET';
-const RESTLET_SCRIPT  = 'REPLACE_SCRIPT_ID';         // "script=" in the RESTlet deploy URL
-const RESTLET_DEPLOY  = 'REPLACE_DEPLOY_ID';         // "deploy=" in the RESTlet deploy URL
-const APP_BASE        = 'http://threepl:8000';       // app on the shared Docker network
-const SYNC_TOKEN      = 'REPLACE_SYNC_TOKEN';        // == app SYNC_TOKEN env
+const RESTLET_SCRIPT  = '1343';                      // "script=" in the RESTlet deploy URL
+const RESTLET_DEPLOY  = '1';                         // "deploy=" in the RESTlet deploy URL
+const APP_BASE        = 'http://threepl:8000';       // app on the shared Docker network (n8n-docker-caddy_default)
+const SYNC_TOKEN      = 'REPLACE_SYNC_TOKEN';        // == SYNC_TOKEN in /opt/threepl/3PL-Portal/.env on the droplet
 const SINCE           = '2025-01-01';                // incremental floor for dated reads
 
-// Customers to sync (NetSuite internal ids from each app customer record).
+// Customers to sync (NetSuite internal ids; sandbox-confirmed 2026-06-26).
 const CUSTOMERS = [
-  { slug: 'mova', ns_customer_id: 'REPLACE', ns_supplier_id: 'REPLACE',
-    ns_location_id: '49', ns_class_id: '253', ns_subsidiary_id: '2' },
   { slug: 'skriva', ns_customer_id: '10496', ns_supplier_id: '10503',
     ns_location_id: '2', ns_class_id: '236', ns_subsidiary_id: '3' },
+  { slug: 'mova', ns_customer_id: '11030', ns_supplier_id: '10872',
+    ns_location_id: '49', ns_class_id: '253', ns_subsidiary_id: '2' },  // returns empty until stock arrives (~end Jul)
 ];
 const READ_ENTITIES = ['invoices', 'purchase_orders', 'item_receipts',
                        'item_fulfilments', 'stock_on_hand'];
-// charge_type -> NetSuite item internalid (for draft-invoice lines on push)
-const CHARGE_ITEMS = { container_unload: 'REPLACE', putaway: 'REPLACE',
-                       storage: 'REPLACE', picking_so: 'REPLACE', picking_vrma: 'REPLACE' };
-// ------------------------------------------------------------------------
+// charge_type -> NetSuite item internalid (for draft-invoice lines on push). Sandbox items.
+const CHARGE_ITEMS = { container_unload: '55070', putaway: '55071',
+                       storage: '55072', picking_so: '55073', picking_vrma: '55074' };
+// --------------------------------------------------------------------------------------------
 
 const host = ACCOUNT_ID.toLowerCase().replace(/_/g, '-');
 const RESTLET_BASE = `https://${host}.restlets.api.netsuite.com/app/site/hosting/restlet.nl`;
@@ -98,7 +101,7 @@ try {
       const lines = run.lines.map((l) => ({ item_id: CHARGE_ITEMS[l.charge_type],
         description: l.description, qty: l.qty, rate: l.rate }));
       const res = await restlet({ action: 'create_invoice', ns_customer_id: run.ns_customer_id,
-        ns_subsidiary_id: run.ns_subsidiary_id,
+        ns_subsidiary_id: run.ns_subsidiary_id, ns_location_id: run.ns_location_id,
         memo: `3PL charges ${run.period_start}–${run.period_end}`, lines });
       const back = await helpers.httpRequest({
         method: 'POST', url: `${APP_BASE}/admin/billing/pushed`, headers: appHeaders,

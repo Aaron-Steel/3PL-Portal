@@ -115,6 +115,10 @@ define(['N/query', 'N/record'], function (query, record) {
     var rec = record.create({ type: record.Type.INVOICE, isDynamic: true });
     rec.setValue({ fieldId: 'entity', value: Number(p.ns_customer_id) });
     if (p.ns_subsidiary_id) rec.setValue({ fieldId: 'subsidiary', value: Number(p.ns_subsidiary_id) });
+    // Location is mandatory on transactions in this account — set it on the header (cascades to
+    // lines) and on each line for accounts that require it line-level. ns_location_id is the
+    // customer's 3PL location (Skriva=2, Mova=49), passed through from the app's customer record.
+    if (p.ns_location_id) rec.setValue({ fieldId: 'location', value: Number(p.ns_location_id) });
     if (p.memo) rec.setValue({ fieldId: 'memo', value: p.memo });
     (p.lines || []).forEach(function (l) {
       rec.selectNewLine({ sublistId: 'item' });
@@ -123,6 +127,7 @@ define(['N/query', 'N/record'], function (query, record) {
       rec.setCurrentSublistValue({ sublistId: 'item', fieldId: 'quantity', value: Number(l.qty) });
       rec.setCurrentSublistValue({ sublistId: 'item', fieldId: 'rate', value: Number(l.rate) });
       if (l.description) rec.setCurrentSublistValue({ sublistId: 'item', fieldId: 'description', value: l.description });
+      if (p.ns_location_id) rec.setCurrentSublistValue({ sublistId: 'item', fieldId: 'location', value: Number(p.ns_location_id) });
       rec.commitLine({ sublistId: 'item' });
     });
     var id = rec.save({ enableSourcing: true, ignoreMandatoryFields: false });

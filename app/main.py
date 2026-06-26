@@ -515,7 +515,7 @@ def admin_billing_pending(request: Request, db: Session = Depends(get_db)):
         c = db.get(Customer, r.customer_id)
         out.append({
             "run_id": r.id, "customer": c.slug, "ns_customer_id": c.ns_customer_id,
-            "ns_subsidiary_id": c.ns_subsidiary_id,
+            "ns_subsidiary_id": c.ns_subsidiary_id, "ns_location_id": c.ns_location_id,
             "period_start": r.period_start.isoformat(), "period_end": r.period_end.isoformat(),
             "lines": [{"charge_type": l.charge_type, "description": l.description,
                        "qty": float(l.qty or 0), "rate": float(l.rate or 0),
