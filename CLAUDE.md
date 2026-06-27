@@ -34,7 +34,7 @@ Brand = NetSuite **classification** (store class id, not text). Mova class `253`
 `49` (warehouse 3PL); Skriva class `236` @ location `2` (Auckland). Skriva customer `10496`, vendor
 `10503`, item `S-STYCASE-WHITE`=`50101`. Picking source SO-vs-VRMA = fulfilment `entity` (customer vs
 vendor); `createdfrom` is NOT selectable in SuiteQL. Open-PO test = `quantityshiprecv < quantity`.
-Fulfilments emit ±qty line pairs — sum positives only. Skriva invoices are $0 product invoices, so the
+Fulfilments: count units off the **ASSET line, ABS(qty)** (SO emits +COGS/−ASSET pair, VRMA emits a lone −ASSET line; old "sum positives" dropped every VRMA — corrected 2026-06-27). Skriva invoices are $0 product invoices, so the
 **service-charge invoice is greenfield**. `inboundshipment` table exists. REST metadata catalog is 403
 (permission); discover fields via `SELECT *`. Another 3PL customer already live (ClassVR) — multi-tenant confirmed.
 

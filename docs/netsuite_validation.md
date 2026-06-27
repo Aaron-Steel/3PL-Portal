@@ -83,14 +83,21 @@ FROM inventorybalance WHERE location=:loc AND item IN (/* customer's items */)
 -- pallets = CEIL(quantityonhand / units_per_pallet); snapshot weekly for billing
 ```
 
-**View 4 / Picking charge — fulfilments (sum positives):**
+**View 4 / Picking charge — fulfilments (ASSET line, ABS qty):**
+> CORRECTION (2026-06-27): the original "sum positives only" was wrong — it dropped every VRMA.
+> A customer SO fulfilment emits a +qty COGS / −qty ASSET line pair, but a VRMA fulfilment (ship
+> back to the supplier) emits a SINGLE **negative** ASSET line with no positive counterpart, so
+> `tl.quantity > 0` returned nothing for VRMAs even though stock left NetSuite. The ASSET line is
+> the real inventory movement in both cases (negative = leaving), so filter to it and take ABS().
 ```sql
 SELECT t.id, t.tranid, t.trandate, t.entity,
        CASE WHEN t.entity=:cust THEN 'SO' ELSE 'VRMA' END source,
-       tl.item, BUILTIN.DF(tl.item) item_name, tl.quantity
+       tl.item, BUILTIN.DF(tl.item) item_name, ABS(tl.quantity) qty
 FROM transaction t JOIN transactionline tl ON tl.transaction = t.id
-WHERE t.type='ItemShip' AND t.entity IN (:cust, :vend) AND tl.class=:class
-  AND tl.mainline='F' AND tl.taxline='F' AND tl.quantity > 0
+JOIN item i ON i.id = tl.item
+WHERE t.type='ItemShip' AND t.entity IN (:cust, :vend) AND i.class=:class
+  AND tl.mainline='F' AND tl.taxline='F'
+  AND tl.accountinglinetype='ASSET' AND tl.quantity IS NOT NULL AND tl.quantity <> 0
   AND t.trandate BETWEEN :from AND :to
 ```
 

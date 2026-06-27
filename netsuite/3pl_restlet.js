@@ -98,18 +98,26 @@ define(['N/query', 'N/record'], function (query, record) {
   }
 
   function itemFulfilments(p) {
+    // Picking source = the fulfilment entity: a $0 SO ships to the customer, a VRMA ships the
+    // stock back to the supplier. Both are type 'ItemShip'. Count units off the ASSET (inventory)
+    // line and take ABS(): a customer SO emits a +qty COGS / -qty ASSET pair, while a VRMA emits a
+    // single NEGATIVE ASSET line with no positive counterpart — so the old "tl.quantity > 0" filter
+    // silently dropped every VRMA (stock left NetSuite but nothing showed here). The ASSET line is
+    // the real inventory movement in both cases (negative = leaving), so ABS() yields picked units
+    // and naturally de-dups the SO ± pair to one row per item.
     var flat = runSuiteQL(
-      "SELECT t.id, t.tranid, t.trandate, t.entity, tl.item, tl.quantity FROM transaction t " +
+      "SELECT t.id, t.tranid, t.trandate, t.entity, tl.item, ABS(tl.quantity) qty FROM transaction t " +
       "JOIN transactionline tl ON tl.transaction=t.id JOIN item i ON i.id=tl.item " +
       "WHERE t.type='ItemShip' AND t.entity IN (" +
       Number(p.ns_customer_id) + "," + Number(p.ns_supplier_id) + ") AND i.class=" +
-      Number(p.ns_class_id) + " AND tl.mainline='F' AND tl.taxline='F' AND tl.quantity > 0 " +
+      Number(p.ns_class_id) + " AND tl.mainline='F' AND tl.taxline='F' " +
+      "AND tl.accountinglinetype='ASSET' AND tl.quantity IS NOT NULL AND tl.quantity <> 0 " +
       "AND t.trandate >= " + sinceExpr(p.since));
     var custId = String(p.ns_customer_id);
     return group(flat, 'id',
       function (r) { return { ns_fulfilment_id: String(r.id), tranid: r.tranid, trandate: r.trandate,
                               source_type: String(r.entity) === custId ? 'SO' : 'VRMA' }; },
-      function (r) { return { ns_item_id: String(r.item), qty: r.quantity }; });
+      function (r) { return { ns_item_id: String(r.item), qty: r.qty }; });
   }
 
   function stockOnHand(p) {
