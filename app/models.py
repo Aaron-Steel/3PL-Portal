@@ -120,6 +120,7 @@ class ItemReceipt(Base):
     tranid: Mapped[str | None] = mapped_column(String, nullable=True)
     trandate: Mapped[date | None] = mapped_column(Date, nullable=True)
     ns_inbound_shipment: Mapped[str | None] = mapped_column(String, nullable=True)
+    po_tranid: Mapped[str | None] = mapped_column(String, nullable=True)  # source PO doc number
     ns_lastmodified: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     lines: Mapped[list["ItemReceiptLine"]] = relationship(

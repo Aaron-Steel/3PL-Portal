@@ -65,7 +65,7 @@ def item_receipts(db: Session, customer_id: int, imap: dict,
     for r in recs:
         for l in r.lines:
             out.append({"tranid": r.tranid, "trandate": r.trandate,
-                        "shipment": r.ns_inbound_shipment,
+                        "shipment": r.ns_inbound_shipment, "po": r.po_tranid,
                         "sku": imap.get(l.ns_item_id, l.ns_item_id),
                         "name": names.get(l.ns_item_id, ""), "qty": float(l.qty)})
     return out

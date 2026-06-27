@@ -126,13 +126,14 @@ def ingest_purchase_orders(db: Session, c: Customer, rows: list[dict]) -> int:
 
 
 def ingest_item_receipts(db: Session, c: Customer, rows: list[dict]) -> int:
-    """rows: [{ns_receipt_id, tranid, trandate, ns_inbound_shipment,
+    """rows: [{ns_receipt_id, tranid, trandate, ns_inbound_shipment, po_tranid,
               lines:[{ns_item_id, qty}]}]"""
     for r in rows:
         rec = _upsert(db, ItemReceipt, "ns_receipt_id", str(r["ns_receipt_id"]),
                       customer_id=c.id, tranid=r.get("tranid"),
                       trandate=_date(r.get("trandate")),
-                      ns_inbound_shipment=r.get("ns_inbound_shipment"))
+                      ns_inbound_shipment=r.get("ns_inbound_shipment"),
+                      po_tranid=r.get("po_tranid"))
         db.flush()
         for l in list(rec.lines):
             db.delete(l)

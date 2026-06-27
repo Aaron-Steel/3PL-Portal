@@ -97,6 +97,7 @@ CREATE TABLE item_receipt (
     tranid              TEXT,
     trandate            DATE,
     ns_inbound_shipment TEXT,                           -- link back to inbound_shipment if present
+    po_tranid           TEXT,                           -- source PO doc number (via previoustransactionlinelink)
     ns_lastmodified     TIMESTAMPTZ,
     synced_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );

@@ -79,13 +79,21 @@ define(['N/query', 'N/record'], function (query, record) {
   function itemReceipts(p) {
     // Scope by the ITEM's brand class (reliably set on the item; a manually-keyed receipt line
     // often has no class) so shared locations don't leak other customers' receipts.
+    // po_tranid: the source PO's document number. createdfrom is not selectable in SuiteQL, so
+    // walk previoustransactionlinelink (receipt = nextdoc) back to a PurchOrd. Null when the
+    // receipt came from something else (e.g. a transfer order), so only true PO receipts show one.
     var flat = runSuiteQL(
-      "SELECT t.id, t.tranid, t.trandate, tl.item, tl.quantity FROM transaction t " +
+      "SELECT t.id, t.tranid, t.trandate, " +
+      "(SELECT MIN(po.tranid) FROM previoustransactionlinelink ptll " +
+      "JOIN transaction po ON po.id=ptll.previousdoc " +
+      "WHERE ptll.nextdoc=t.id AND po.type='PurchOrd') po_tranid, " +
+      "tl.item, tl.quantity FROM transaction t " +
       "JOIN transactionline tl ON tl.transaction=t.id JOIN item i ON i.id=tl.item " +
       "WHERE t.type='ItemRcpt' AND i.class=" + Number(p.ns_class_id) +
       " AND tl.mainline='F' AND tl.taxline='F' AND t.trandate >= " + sinceExpr(p.since));
     return group(flat, 'id',
-      function (r) { return { ns_receipt_id: String(r.id), tranid: r.tranid, trandate: r.trandate }; },
+      function (r) { return { ns_receipt_id: String(r.id), tranid: r.tranid, trandate: r.trandate,
+                              po_tranid: r.po_tranid || null }; },
       function (r) { return { ns_item_id: String(r.item), qty: r.quantity }; });
   }
 
