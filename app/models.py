@@ -145,6 +145,9 @@ class StockOnHand(Base):
     qty_on_hand: Mapped[float] = mapped_column(Numeric(14, 2))
     units_per_pallet: Mapped[int | None] = mapped_column(Integer, nullable=True)
     pallets: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    # When this row was last written by a sync. Today's row is overwritten in place each
+    # ~15-min run, so this is the "live as at" time the portal shows for stock on hand.
+    synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class ItemFulfilment(Base):

@@ -13,7 +13,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import inspect, select, text
 from sqlalchemy.orm import Session
 
 from . import netsuite, perms, service
@@ -25,6 +25,24 @@ from .security import hash_password, sign, unsign, verify_password
 HERE = os.path.dirname(os.path.abspath(__file__))
 Base.metadata.create_all(engine)
 
+
+def _ensure_columns():
+    """Tiny idempotent migration (no Alembic): add columns introduced after a DB was first
+    created. create_all() never alters existing tables, so without this the live-SOH
+    `synced_at` column would be missing on the existing SQLite/Postgres dbs. Both engines
+    accept `ALTER TABLE ... ADD COLUMN`; we only add when absent."""
+    additions = {"stock_on_hand": {"synced_at": "TIMESTAMP"}}
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        for table, cols in additions.items():
+            existing = {c["name"] for c in insp.get_columns(table)}
+            for name, ddl in cols.items():
+                if name not in existing:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+
+
+_ensure_columns()
+
 app = FastAPI(title="Macgear 3PL Portal")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
 templates = Jinja2Templates(directory=os.path.join(HERE, "templates"))
@@ -33,6 +51,29 @@ templates.env.filters["money0"] = lambda v: "" if v is None else f"{round(v):,}"
 templates.env.filters["qty"] = lambda v: "" if v is None else f"{v:,.0f}"
 templates.env.filters["d"] = lambda v: v.strftime("%d %b %Y") if v else ""
 templates.env.filters["dshort"] = lambda v: v.strftime("%d %b") if v else ""
+
+
+def _ago(v):
+    """Relative freshness for the live SOH sync. v is a UTC datetime (or a date
+    fallback). Timezone-agnostic on purpose — avoids showing UTC clock time to an
+    AEST user, and a large value flags a stalled sync."""
+    if v is None:
+        return ""
+    if not isinstance(v, datetime):
+        return v.strftime("%d %b")
+    secs = (datetime.utcnow() - v).total_seconds()
+    if secs < 90:
+        return "just now"
+    mins = secs / 60
+    if mins < 60:
+        return f"{int(mins)} min ago"
+    hrs = mins / 60
+    if hrs < 24:
+        return f"{int(hrs)} hr{'s' if int(hrs) != 1 else ''} ago"
+    return v.strftime("%d %b")
+
+
+templates.env.filters["ago"] = _ago
 _CHIP = {"received": "c-good", "shipped": "c-good", "paid": "c-good", "paid in full": "c-good",
          "open": "c-info", "in transit": "c-info", "picking": "c-warn", "overdue": "c-crit"}
 templates.env.filters["chip"] = lambda s: _CHIP.get((s or "").lower(), "c-neutral")
@@ -217,6 +258,7 @@ def portal(slug: str, view: str, request: Request, db: Session = Depends(get_db)
         ctx["rows"] = service.item_receipts(db, cust.id, imap, service.item_names(db, cust.id))
     elif view == "stock_on_hand":
         ctx["rows"] = service.stock_on_hand(db, cust.id, imap, service.item_names(db, cust.id))
+        ctx["soh_synced_at"] = service.soh_synced_at(db, cust.id)
     elif view == "fulfilments":
         ctx["rows"] = service.fulfilments(db, cust.id, imap)
     elif view == "invoices":

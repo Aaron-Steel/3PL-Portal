@@ -86,6 +86,12 @@ Stock on order (open POs) · Item receipts · Stock on hand · Item fulfilments 
   ({customer, entity, rows}); `app/netsuite.py` `ingest_*` upsert into the cache (invoices+lines, POs,
   receipts, fulfilments, stock_on_hand; inbound_shipments TODO). NetSuite is source of truth — invoices
   (status/edits/payments) come from the sync.
+- **Two sync lanes (mode-driven, same Code node):** FAST = `stock_on_hand` only every **15 min**
+  (`mode:"soh"`, no writes) → portal SOH view is near-live ("● live · updated N min ago"). FULL = all 6
+  entities + billing push, daily/weekly (`mode:"full"`/default). SOH ingest uses **replace semantics**
+  (items not in the pull are zeroed; zero-qty hidden from the view) and stamps `synced_at`. Today's SOH
+  row is overwritten in place; older days persist as daily history. **Storage billing = AVG daily pallets
+  × weeks** (`billing.py`) — never sum every snapshot (would overcharge ~7× at this cadence).
 - **Writes:** "Queue for NetSuite" sets `billing_run.status='ready_to_push'` (no NS call). n8n polls
   `GET /admin/billing/pending`, creates the **draft** invoice via the RESTlet `create_invoice` action,
   then `POST /admin/billing/pushed` ({run_id, ns_invoice_id}) → status `pushed`. Next read-sync pulls the

@@ -154,11 +154,21 @@ def ingest_inbound_shipments(db: Session, c: Customer, rows: list[dict]) -> int:
 
 
 def ingest_stock_on_hand(db: Session, c: Customer, rows: list[dict]) -> int:
-    """A full snapshot for today. rows: [{ns_item_id, qty_on_hand, units_per_pallet?}].
-    NetSuite's inventorybalance returns MULTIPLE rows per item (per status/bin, incl. +/- pairs),
-    so first aggregate to one net qty per item — that keeps the (customer, today, item) snapshot
-    key unique and yields the true on-hand. Pallets = ceil(qty/units_per_pallet); units_per_pallet
-    falls back to the Item record."""
+    """A full current-state snapshot for today, written in place each ~15-min sync.
+
+    rows: [{ns_item_id, qty_on_hand, units_per_pallet?}]. NetSuite's inventorybalance returns
+    MULTIPLE rows per item (per status/bin, incl. +/- pairs), so first aggregate to one net qty
+    per item — that keeps the (customer, today, item) snapshot key unique and yields the true
+    on-hand. Pallets = ceil(qty/units_per_pallet); units_per_pallet falls back to the Item record.
+
+    REPLACE SEMANTICS: this is treated as the complete on-hand set for the customer *as at now*.
+    An item whose stock has dropped to zero usually disappears from inventorybalance entirely
+    (no row), so any of today's existing rows NOT in this pull are zeroed — otherwise a fully
+    shipped-out SKU would show its last non-zero qty forever in the near-live view. (If NetSuite
+    instead returns explicit qty=0 rows, those are handled the same way, so this is correct either
+    way.) Older days' snapshots are left untouched as history for billing.
+    """
+    now = datetime.utcnow()
     today = date.today()
     upp = {i.ns_item_id: i.units_per_pallet
            for i in db.scalars(select(Item).where(Item.customer_id == c.id)).all()}
@@ -169,18 +179,32 @@ def ingest_stock_on_hand(db: Session, c: Customer, rows: list[dict]) -> int:
         a["qty"] += _num(r.get("qty_on_hand")) or 0
         if a["per"] is None and r.get("units_per_pallet"):
             a["per"] = r.get("units_per_pallet")
+
+    def _pallets(qty, per):
+        return math.ceil(qty / per) if per and qty > 0 else (0 if per else None)
+
+    existing_today = {s.ns_item_id: s for s in db.scalars(select(StockOnHand).where(
+        StockOnHand.customer_id == c.id, StockOnHand.snapshot_date == today)).all()}
+
     for ns_item, a in agg.items():
         qty = a["qty"]
         per = a["per"] or upp.get(ns_item)
-        pallets = math.ceil(qty / per) if per and qty > 0 else (0 if per else None)
-        existing = db.scalar(select(StockOnHand).where(
-            StockOnHand.customer_id == c.id, StockOnHand.snapshot_date == today,
-            StockOnHand.ns_item_id == ns_item))
+        pallets = _pallets(qty, per)
+        existing = existing_today.get(ns_item)
         if existing:
-            existing.qty_on_hand, existing.units_per_pallet, existing.pallets = qty, per, pallets
+            existing.qty_on_hand, existing.units_per_pallet = qty, per
+            existing.pallets, existing.synced_at = pallets, now
         else:
             db.add(StockOnHand(customer_id=c.id, snapshot_date=today, ns_item_id=ns_item,
-                               qty_on_hand=qty, units_per_pallet=per, pallets=pallets))
+                               qty_on_hand=qty, units_per_pallet=per, pallets=pallets,
+                               synced_at=now))
+
+    # Zero today's rows for items no longer reported on hand (replace semantics).
+    for ns_item, s in existing_today.items():
+        if ns_item not in agg and float(s.qty_on_hand or 0) != 0:
+            s.qty_on_hand = 0
+            s.pallets = 0 if s.units_per_pallet else None
+            s.synced_at = now
     return len(agg)
 
 

@@ -73,7 +73,10 @@ def item_receipts(db: Session, customer_id: int, imap: dict,
 
 def stock_on_hand(db: Session, customer_id: int, imap: dict,
                   names: dict | None = None) -> list[dict]:
-    """Latest snapshot per item, with storage/week derived from the rate card."""
+    """Latest snapshot per item, with storage/week derived from the rate card.
+    The snapshot is refreshed in place every ~15 min, so rows carry synced_at
+    (use soh_synced_at() for the single "live as at" time shown in the portal).
+    Items currently at zero on hand are dropped from the view."""
     rate = storage_rate(db, customer_id)
     names = names or {}
     latest = db.scalar(
@@ -86,6 +89,8 @@ def stock_on_hand(db: Session, customer_id: int, imap: dict,
                                   StockOnHand.snapshot_date == latest)).all()
     out = []
     for s in rows:
+        if float(s.qty_on_hand or 0) == 0:      # zeroed-out (shipped to nil) — hide from view
+            continue
         pallets = (float(s.pallets) if s.pallets is not None else
                    (math.ceil(float(s.qty_on_hand) / s.units_per_pallet)
                     if s.units_per_pallet else 0))
@@ -94,8 +99,22 @@ def stock_on_hand(db: Session, customer_id: int, imap: dict,
                     "qty_on_hand": float(s.qty_on_hand),
                     "units_per_pallet": s.units_per_pallet, "pallets": pallets,
                     "storage_per_week": round(pallets * rate, 2),
-                    "snapshot_date": s.snapshot_date})
+                    "snapshot_date": s.snapshot_date, "synced_at": s.synced_at})
     return out
+
+
+def soh_synced_at(db: Session, customer_id: int):
+    """The 'live as at' time for stock on hand — most recent synced_at on the latest
+    snapshot day. Falls back to the snapshot date if synced_at was never written."""
+    latest = db.scalar(
+        select(StockOnHand.snapshot_date).where(StockOnHand.customer_id == customer_id)
+        .order_by(StockOnHand.snapshot_date.desc()).limit(1))
+    if latest is None:
+        return None
+    return db.scalar(
+        select(func.max(StockOnHand.synced_at)).where(
+            StockOnHand.customer_id == customer_id,
+            StockOnHand.snapshot_date == latest)) or latest
 
 
 def fulfilments(db: Session, customer_id: int, imap: dict) -> list[dict]:
@@ -200,6 +219,7 @@ def overview(db: Session, customer: Customer, imap: dict) -> dict:
     return {
         "brand": customer.brand_label or "", "location": customer.location_label or "",
         "skus": len(imap),
+        "soh_synced_at": soh_synced_at(db, customer.id),
         "units_on_hand": sum(r["qty_on_hand"] for r in soh),
         "pallets": sum(r["pallets"] for r in soh),
         "storage_per_week": sum(r["storage_per_week"] for r in soh),

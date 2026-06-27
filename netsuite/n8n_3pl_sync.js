@@ -3,7 +3,14 @@
 // (netsuite/3pl_restlet.js), and talks to the app's token-authed endpoints. No app/AI/MCP
 // touches NetSuite — this node + the RESTlet are the only NetSuite communication.
 //
-// Wire as:  Schedule Trigger (e.g. hourly / weekly)  ->  this Code node.
+// Two schedules feed this same node (mode comes from a Set node in front of each):
+//   FAST lane — Schedule Trigger (every 15 min) -> Set {mode:"soh"} -> this node.
+//               Pulls only stock_on_hand and skips the billing-push writes, so the portal's
+//               SOH view stays near-live without re-pulling invoices/POs/etc 96x/day.
+//   FULL lane — Schedule Trigger (daily + the weekly billing window) -> Set {mode:"full"}
+//               (or no Set node at all) -> this node. Pulls all 6 entities and does the
+//               draft-invoice writes, exactly as before.
+// With no Set node / no mode, it defaults to "full" so existing single-schedule wiring is unchanged.
 
 const crypto = require('crypto');
 
@@ -25,8 +32,16 @@ const SINCE           = '2025-01-01';                // incremental floor for da
 // Customers to sync are NOT hardcoded here — they're fetched from the app's
 // /admin/sync-config (managed in the admin console: Customers > + Add customer).
 // Add/edit a customer there and the next run picks it up; no node edit needed.
-const READ_ENTITIES = ['items', 'invoices', 'purchase_orders', 'item_receipts',
-                       'item_fulfilments', 'stock_on_hand'];
+// Mode from the upstream Set node: "soh" = fast lane (SOH only, no writes); anything
+// else (incl. missing) = full lane. Read defensively so the node also works standalone.
+let MODE = 'full';
+try { const inp = $input.first(); if (inp && inp.json && inp.json.mode) MODE = String(inp.json.mode); } catch (e) {}
+const FAST = MODE === 'soh';
+const READ_ENTITIES = FAST
+  ? ['stock_on_hand']
+  : ['items', 'invoices', 'purchase_orders', 'item_receipts',
+     'item_fulfilments', 'stock_on_hand'];
+const DO_WRITES = !FAST;   // billing draft-invoice push runs on the full lane only
 // charge_type -> NetSuite item internalid (for draft-invoice lines on push). Sandbox items.
 const CHARGE_ITEMS = { container_unload: '55070', putaway: '55071',
                        storage: '55072', picking_so: '55073', picking_vrma: '55074' };
@@ -99,8 +114,9 @@ for (const c of CUSTOMERS) {
   }
 }
 
-// 2) WRITES: create a draft invoice for each queued billing run, then report it back
-try {
+// 2) WRITES: create a draft invoice for each queued billing run, then report it back.
+//    Full lane only — the 15-min SOH lane must not poll/push billing.
+if (DO_WRITES) try {
   const pending = (await helpers.httpRequest({
     method: 'GET', url: `${APP_BASE}/admin/billing/pending`, headers: appHeaders, json: true })).pending || [];
   for (const run of pending) {

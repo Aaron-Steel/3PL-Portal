@@ -47,7 +47,14 @@ A period already queued/pushed/invoiced is locked against re-billing.
 5. **n8n:** Schedule Trigger → Code node with `netsuite/n8n_3pl_sync.js`; fill the constants
    (account id, keys/token, script/deploy ids, `APP_BASE`, `SYNC_TOKEN`, each customer's NetSuite ids,
    and `CHARGE_ITEMS` mapping each charge_type → its NetSuite invoice item id).
-6. **Cadence:** transactional reads hourly–4h; a weekly run also drains the billing-push queue.
+6. **Cadence — two lanes feeding the same Code node** (mode set by a Set node in front of each):
+   - **Fast lane (every 15 min):** Schedule Trigger → Set `{mode:"soh"}` → Code node. Pulls only
+     `stock_on_hand` and skips the billing-push writes, keeping the portal's SOH view near-live without
+     re-pulling invoices/POs/receipts/fulfilments 96×/day. SOH SuiteQL is one grouped query per customer
+     (cheap on governance). `inventorybalance` is real-time in NetSuite, so 15-min polling sees genuine change.
+   - **Full lane (daily + the weekly billing window):** Schedule Trigger → Set `{mode:"full"}` (or no Set
+     node) → Code node. Pulls all 6 entities and drains the billing-push queue. With no `mode`, the node
+     defaults to full, so any pre-existing single-schedule wiring keeps working unchanged.
 
 ## Validated NetSuite ids (from `netsuite_validation.md`)
 Mova: location `49`, class `253`. Skriva: customer `10496`, vendor `10503`, location `2`, class `236`.

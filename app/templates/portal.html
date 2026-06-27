@@ -69,7 +69,7 @@
       {% set d = data %}
       <div class="kpis">
         <div class="kpi k-stock"><div class="rail"></div><div class="lab">Units on hand</div>
-          <div class="val num">{{ d.units_on_hand|qty }}</div><div class="meta">{{ d.skus }} SKUs · {{ d.brand }}</div></div>
+          <div class="val num">{{ d.units_on_hand|qty }}</div><div class="meta">{{ d.skus }} SKUs · {{ d.brand }}{% if d.soh_synced_at %} · <span class="live">● live</span> {{ d.soh_synced_at|ago }}{% endif %}</div></div>
         <div class="kpi k-pallet"><div class="rail"></div><div class="lab">Pallets stored</div>
           <div class="val num">{{ d.pallets|qty }}</div><div class="meta">→ <b>${{ d.storage_per_week|money }}</b>/wk storage</div></div>
         <div class="kpi k-order"><div class="rail"></div><div class="lab">Units on order</div>
@@ -131,7 +131,7 @@
       </div>
 
     {% elif view == "stock_on_hand" %}
-      <div class="card"><header><h3>Stock on hand</h3><span class="hint">{{ customer.location_label }}{% if rows %} · snapshot {{ rows[0].snapshot_date|dshort }}{% endif %}</span></header>
+      <div class="card"><header><h3>Stock on hand</h3><span class="hint">{{ customer.location_label }}{% if soh_synced_at %} · <span class="live">● live</span> · updated {{ soh_synced_at|ago }}{% endif %}</span></header>
         <div class="tablewrap"><table>
           <thead><tr><th>SKU</th><th>Description</th><th class="r">On hand</th><th class="r">Units / pallet</th><th class="r">Pallets</th><th class="r">Storage / wk</th></tr></thead>
           <tbody>{% for r in rows %}<tr><td><span class="id">{{ r.sku }}</span></td><td class="prim">{{ r.name }}</td>

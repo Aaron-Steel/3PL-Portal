@@ -47,21 +47,28 @@ uniquely identifies that customer's 3PL stock. **(Validate the exact filter per 
 |---|---|---|---|
 | Container unload (40ft loose) | $1,500 | per container | count of `inbound_shipment` **received** in period |
 | Putaway | $1.00 | per unit | sum of `item_receipt_line.qty` in period |
-| Storage | $4.50 | per pallet/week | `ceil(units_on_hand / units_per_pallet)` per snapshot week |
+| Storage | $4.50 | per pallet/week | **avg daily pallets** over the period × weeks (`ceil(units_on_hand / units_per_pallet)` totalled per snapshot day, averaged) |
 | Picking — SO | $1.00 | per unit | sum of `item_fulfilment_line.qty` where source = SO |
 | Picking — VRMA | $1.00 | per unit | sum of `item_fulfilment_line.qty` where source = VRMA |
 | Shipping | per shipping rate card | — | out of scope for v1 auto-billing |
 
-> **Storage is the tricky one.** "Per pallet per week" needs a defensible weekly pallet figure. v0 decision:
-> snapshot stock-on-hand **once per billing week** (e.g. Monday AM) and bill that week's pallets off the
-> snapshot. Alternative (avg daily pallets) is more accurate but needs daily snapshots — revisit if Mova disputes.
+> **Storage is the tricky one.** "Per pallet per week" needs a defensible weekly pallet figure.
+> **Current decision (2026-06-27):** now that SOH refreshes every ~15 min and persists one row per
+> day, bill the **average of the daily pallet totals** across the billing week × the number of weeks
+> the period spans (`billing.py`). This is the "avg daily pallets" model — more accurate than a single
+> weekly reading and robust to how often we snapshot. With only one snapshot in the period it degrades
+> to "that reading held all week" (the original v0 weekly-snapshot behaviour). **Critical:** never *sum*
+> every snapshot — at daily/intraday cadence that overcharges ~7×.
 
 ## Sync design
 
 - **Mechanism:** NetSuite REST/SuiteQL via Token-Based Auth (TBA), pulled on a schedule into Postgres.
-- **Cadence (v0):**
-  - Transactional tables (PO, receipts, fulfilments, invoices, inbound shipments): every **1–4 h** (portal freshness).
-  - `stock_on_hand`: at least **weekly snapshot** for billing + a more frequent refresh for the live portal view.
+- **Cadence (current):** two n8n lanes off the same Code node (`netsuite/n8n_3pl_sync.js`, mode-driven).
+  - **Fast lane — `stock_on_hand` only, every 15 min** (`mode:"soh"`, no billing writes): keeps the portal's
+    SOH view near-live. Today's row is overwritten in place; the view shows a "● live · updated N min ago" stamp.
+  - **Full lane — all 6 entities + draft-invoice writes, daily + the weekly billing window** (`mode:"full"`):
+    transactional tables (PO, receipts, fulfilments, invoices, inbound shipments) and the billing push.
+    Daily SOH rows accumulate as history that the storage charge averages.
 - **Runner:** n8n scheduled workflow on the droplet (same pattern as the birthday notifier), calling the
   app's sync endpoints, **or** an in-app APScheduler job. Decide at scaffold time.
 - **Watermark:** each sync stores `last_synced_at` + last seen `lastmodifieddate` in `sync_log`; incremental

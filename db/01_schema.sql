@@ -107,7 +107,11 @@ CREATE TABLE item_receipt_line (
     qty                 NUMERIC(14,2) NOT NULL
 );
 
--- View 3 + billing storage: stock-on-hand snapshots (one row per item per snapshot)
+-- View 3 + billing storage: stock-on-hand snapshots (one row per item per day).
+-- Today's row is overwritten in place by the ~15-min SOH sync (near-live view); older
+-- days persist as daily history that billing averages into pallet-weeks. synced_at is the
+-- "live as at" time. Items that drop to zero are written as qty 0 (replace semantics), so
+-- a shipped-out SKU doesn't show its last non-zero qty forever.
 CREATE TABLE stock_on_hand (
     id                  SERIAL PRIMARY KEY,
     customer_id         INTEGER NOT NULL REFERENCES customer(id),
@@ -116,6 +120,7 @@ CREATE TABLE stock_on_hand (
     qty_on_hand         NUMERIC(14,2) NOT NULL,
     units_per_pallet    INTEGER,                        -- snapshotted so historic pallet calc is stable
     pallets             NUMERIC(14,2),                  -- ceil(qty_on_hand / units_per_pallet), computed at sync
+    synced_at           TIMESTAMP,                      -- when this row was last written by a sync
     UNIQUE (customer_id, snapshot_date, ns_item_id)
 );
 
