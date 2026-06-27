@@ -93,9 +93,20 @@ def ingest_invoices(db: Session, c: Customer, rows: list[dict]) -> int:
 
 def ingest_purchase_orders(db: Session, c: Customer, rows: list[dict]) -> int:
     """rows: [{ns_po_id, tranid, trandate, status,
-              lines:[{ns_item_id, qty_ordered, qty_received, expected_date}]}]"""
+              lines:[{ns_item_id, qty_ordered, qty_received, expected_date}]}]
+
+    REPLACE SEMANTICS: the RESTlet returns the full set of *open* POs (lines with
+    quantityshiprecv < quantity), with no incremental floor — so this list is the complete
+    current open-PO picture. A PO that's been fully received drops out of the pull entirely;
+    we must therefore PRUNE any cached PO for this customer not in the pull, or it lingers in
+    'stock on order' forever showing its old outstanding. (Partial receipts stay in the pull
+    with an updated qty_received, so their outstanding just shrinks.)
+    """
+    seen: set[str] = set()
     for r in rows:
-        po = _upsert(db, PurchaseOrder, "ns_po_id", str(r["ns_po_id"]),
+        ns_po = str(r["ns_po_id"])
+        seen.add(ns_po)
+        po = _upsert(db, PurchaseOrder, "ns_po_id", ns_po,
                      customer_id=c.id, tranid=r.get("tranid"),
                      trandate=_date(r.get("trandate")), status=r.get("status"))
         db.flush()
@@ -106,6 +117,11 @@ def ingest_purchase_orders(db: Session, c: Customer, rows: list[dict]) -> int:
                           qty_ordered=_num(ln.get("qty_ordered")),
                           qty_received=_num(ln.get("qty_received")),
                           expected_date=_date(ln.get("expected_date"))))
+    # Drop POs that are no longer open (fully received/closed → absent from the pull).
+    for po in db.scalars(select(PurchaseOrder).where(
+            PurchaseOrder.customer_id == c.id)).all():
+        if po.ns_po_id not in seen:
+            db.delete(po)
     return len(rows)
 
 
