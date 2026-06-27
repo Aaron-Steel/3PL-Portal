@@ -8,21 +8,44 @@
   --warn:#9C6A0E; --warn-tint:#F6EDD8;
   --crit:#B0463C; --crit-tint:#F6E4E1;
   --info:#2C5A8C; --info-tint:#E3ECF5;
+  --neutral-tint:#EEF1F4;
   --r:10px;
   --mono:"Cascadia Code",Consolas,"SF Mono",ui-monospace,monospace;
   --ui:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
   --shadow:0 1px 2px rgba(20,33,46,.04),0 2px 8px rgba(20,33,46,.05);
   --shadow-lg:0 8px 30px rgba(20,33,46,.10);
 }
+
+/* Dark theme — redefine the surface/ink/line palette and darken the status tints.
+   The sidebar is already dark in both modes, so it needs no overrides. Brand teal is
+   kept but lightened slightly for contrast on dark surfaces. */
+[data-theme="dark"]{
+  --ground:#0F1518; --surface:#161E22; --surface-2:#1B252A;
+  --ink:#E7EDEF; --ink-2:#B7C2C6; --muted:#8A969B; --faint:#6B777C;
+  --line:#293539; --line-2:#222C30;
+  --brand:#2BA3AC; --brand-ink:#7FD6DC; --brand-tint:#143438; --brand-tint-2:#16282B;
+  --amber:#D79A3C; --amber-tint:#33270F;
+  --good:#5BC08C; --good-tint:#14271D;
+  --warn:#D6A23E; --warn-tint:#2C2410;
+  --crit:#E0796D; --crit-tint:#2E1714;
+  --info:#6FA6DE; --info-tint:#142434;
+  --neutral-tint:#243035;
+  --shadow:0 1px 2px rgba(0,0,0,.30),0 2px 8px rgba(0,0,0,.34);
+  --shadow-lg:0 8px 30px rgba(0,0,0,.50);
+  color-scheme:dark;
+}
 *{box-sizing:border-box} html,body{margin:0;height:100%}
 body{background:var(--ground);color:var(--ink);font-family:var(--ui);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none}
 .num{font-variant-numeric:tabular-nums} .faint{color:var(--muted)}
 button{font-family:inherit}
+/* Themed form controls so inputs/selects don't fall back to browser-white in dark mode.
+   More specific rules (e.g. .ctx select in the dark sidebar) still win. */
+input,select,textarea{background:var(--surface);color:var(--ink)}
 
 /* login */
 .login-wrap{min-height:100vh;display:grid;place-items:center}
-.login-card{background:#fff;padding:34px 30px;border-radius:14px;box-shadow:var(--shadow-lg);width:320px}
+.login-card{background:var(--surface);padding:34px 30px;border-radius:14px;box-shadow:var(--shadow-lg);width:320px}
 .login-card h1{font-size:19px;margin:0 0 18px}
 .login-card label{display:block;font-size:13px;color:var(--muted);margin-bottom:12px}
 .login-card input{display:block;width:100%;margin-top:5px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:15px}
@@ -32,7 +55,9 @@ button{font-family:inherit}
 /* shell */
 .app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
 .side{background:#0C2A2D;color:#CFE0E0;display:flex;flex-direction:column;border-right:1px solid #0A2225;position:sticky;top:0;height:100vh}
-.brand{display:flex;align-items:center;gap:11px;padding:18px 18px 16px}
+.brand{display:flex;align-items:center;gap:11px;padding:18px 18px 16px;border-radius:9px;margin:4px 6px 0;transition:background .15s}
+.brand:hover{background:rgba(255,255,255,.05)}
+.brand:hover .mark{box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)}
 .brand .mark{width:34px;height:34px;border-radius:8px;flex:0 0 auto;display:grid;place-items:center;background:linear-gradient(150deg,#16858f,#0E5A61);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
 .brand b{color:#fff;font-size:15px;font-weight:650;letter-spacing:-.2px;display:block;line-height:1.15}
 .brand span{color:#7FA6A8;font-size:11px;letter-spacing:.3px}
@@ -64,12 +89,19 @@ main{display:flex;flex-direction:column;min-width:0}
 .topbar h1{font-size:18px;margin:0;font-weight:650;letter-spacing:-.3px}
 .topbar .sub{color:var(--muted);font-size:12.5px;margin-top:1px}
 .topbar .spacer{flex:1}
-.navtoggle{display:none;border:1px solid var(--line);background:#fff;border-radius:8px;width:38px;height:38px;font-size:18px;line-height:1;cursor:pointer;color:var(--ink-2);flex:0 0 auto}
+.navtoggle{display:none;border:1px solid var(--line);background:var(--surface);border-radius:8px;width:38px;height:38px;font-size:18px;line-height:1;cursor:pointer;color:var(--ink-2);flex:0 0 auto}
 .scrim{display:none}
 .weekpick{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:7px 11px}
 .weekpick b{color:var(--ink);font-variant-numeric:tabular-nums}
 .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 11px;border-radius:20px}
 .pill.ns{background:var(--brand-tint);color:var(--brand-ink)}
+.themetoggle{flex:0 0 auto;display:grid;place-items:center;width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);cursor:pointer;transition:background .15s,color .15s}
+.themetoggle:hover{background:var(--surface-2);color:var(--ink)}
+.themetoggle .i-sun{display:none}
+[data-theme="dark"] .themetoggle .i-moon{display:none}
+[data-theme="dark"] .themetoggle .i-sun{display:block}
+.adminhead .themetoggle{border-color:rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#CFE0E0}
+.adminhead .themetoggle:hover{background:rgba(255,255,255,.12);color:#fff}
 .ribbon{background:linear-gradient(90deg,var(--amber-tint),#fbf4e6);border-bottom:1px solid #ecdcbb;color:#7a4f08;font-size:12.5px;padding:8px 28px;display:flex;align-items:center;gap:9px}
 .ribbon b{font-weight:700}
 .view{padding:24px 28px 60px;width:100%}
@@ -157,7 +189,7 @@ tfoot td{padding:12px 16px;font-weight:650;border-top:2px solid var(--line);back
 .chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.9}
 .c-good{background:var(--good-tint);color:var(--good)} .c-info{background:var(--info-tint);color:var(--info)}
 .c-warn{background:var(--warn-tint);color:var(--warn)} .c-crit{background:var(--crit-tint);color:var(--crit)}
-.c-neutral{background:#EEF1F4;color:var(--ink-2)}
+.c-neutral{background:var(--neutral-tint);color:var(--ink-2)}
 .tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.4px;padding:2px 7px;border-radius:5px;text-transform:uppercase}
 .tag.so{background:var(--brand-tint);color:var(--brand-ink)} .tag.vrma{background:var(--amber-tint);color:var(--amber)}
 .tag.rcpt{background:var(--info-tint);color:var(--info)}
@@ -172,11 +204,11 @@ tfoot td{padding:12px 16px;font-weight:650;border-top:2px solid var(--line);back
 
 /* billing */
 .flowline{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12px;color:var(--muted);padding:11px 16px;background:var(--brand-tint-2);border:1px solid var(--line-2);border-radius:var(--r);margin-bottom:16px}
-.flowline code{font-family:var(--mono);background:#fff;border:1px solid var(--line);padding:1px 6px;border-radius:5px;color:var(--ink-2);font-size:11.5px}
+.flowline code{font-family:var(--mono);background:var(--surface);border:1px solid var(--line);padding:1px 6px;border-radius:5px;color:var(--ink-2);font-size:11.5px}
 .period{display:flex;gap:14px;align-items:end;margin-bottom:16px}
 .period label{font-size:13px;color:var(--muted)}
 .period input{display:block;margin-top:4px;padding:7px;border:1px solid var(--line);border-radius:8px}
-.period button{padding:9px 16px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;font-size:14px}
+.period button{padding:9px 16px;border:1px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer;font-size:14px;color:var(--ink)}
 .billgrid{display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start}
 @media(max-width:980px){.billgrid{grid-template-columns:1fr}}
 .summary{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;position:sticky;top:86px}
@@ -242,3 +274,8 @@ tfoot td{padding:12px 16px;font-weight:650;border-top:2px solid var(--line);back
 .rateinput{width:140px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;text-align:right;font-variant-numeric:tabular-nums;font-size:14px}
 
 @media(max-width:640px){.adminhead{flex-wrap:wrap;gap:10px 16px;padding:12px 16px}.adminmain{padding:18px 16px 48px}.ah-back{margin-left:0}}
+
+/* dark-mode tweaks for the few components with hardcoded light borders */
+[data-theme="dark"] .flash.ok,[data-theme="dark"] .savedbar{border-color:#2c5a43}
+[data-theme="dark"] .flash.warn{border-color:#4a3c16}
+[data-theme="dark"] .btn.danger:hover{background:#3a1d18}

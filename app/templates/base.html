@@ -4,6 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Macgear 3PL Portal{% endblock %}</title>
+  <script>
+    // Set the theme before first paint to avoid a flash. Saved choice wins; otherwise
+    // follow the OS preference.
+    (function(){
+      try{
+        var t = localStorage.getItem('theme');
+        if(!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      }catch(e){}
+    })();
+    function toggleTheme(){
+      var cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', cur);
+      try{ localStorage.setItem('theme', cur); }catch(e){}
+    }
+  </script>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
