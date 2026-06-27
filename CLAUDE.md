@@ -46,8 +46,15 @@ Fulfilments: count units off the **ASSET line, ABS(qty)** (SO emits +COGS/−ASS
 ## Processes (mirror these in any data model)
 - **Receiving:** $0 PO on supplier account against 3PL location → inbound shipment per container → receipt on arrival.
 - **Storage:** stock on hand in 3PL location, brand `Mova 3PL`. Charged per pallet per week. Pallets = `units on hand ÷ units per pallet`.
-- **Dispatching:** $0 sales order on customer record. OR Macgear buys it in: $0 VRMA to remove from 3PL inventory + physically move, then normal-price PO to the normal warehouse.
+- **Dispatching:** two paths — see **Dispatch procedure** below for which to use.
 - **Billing (weekly, against customer record):** the 5 charge sources below.
+
+## Dispatch procedure (how stock leaves the 3PL)
+**Decision rule — is Macgear taking ownership of (paying for) the stock?**
+- **Yes → standard/default path: VRMA on the vendor (customer-as-supplier) account, then a normal-price PO into the regular warehouse.** The $0 VRMA clears the 3PL receipt and removes it from the customer's held inventory; the buy-in PO brings it onto Macgear's books as owned stock at cost. This is the **majority case**.
+- **No (just dispatching the customer's goods on their behalf) → $0 Sales Order on the customer account.** Pure logistics; ownership never transfers to Macgear.
+
+**Why the default matters / failure mode:** using an SO when Macgear is actually buying ships the stock off the customer's 3PL holding but brings nothing onto Macgear's books → phantom inventory + unrecognised COGS. So when in doubt and Macgear is purchasing, use VRMA+PO. Billing is **neutral** to the choice — picking is $1.00/unit for both SO and VRMA (see rate card) — so always choose by the accounting reality, never by what's billable. Both paths show in the portal Fulfilments view (tagged SO vs VRMA) and both deduct SOH.
 
 ## Rate card (Mova)
 | Charge | Rate | Basis |

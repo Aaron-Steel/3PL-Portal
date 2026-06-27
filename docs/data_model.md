@@ -60,6 +60,24 @@ uniquely identifies that customer's 3PL stock. **(Validate the exact filter per 
 > to "that reading held all week" (the original v0 weekly-snapshot behaviour). **Critical:** never *sum*
 > every snapshot — at daily/intraday cadence that overcharges ~7×.
 
+## Dispatch procedure (how stock leaves the 3PL)
+
+Two NetSuite paths move stock out, and they record **different economic events** — pick by the
+reality, not by convenience (billing is identical either way: picking is $1.00/unit for both).
+
+**Decision rule: is Macgear taking ownership of (paying for) the stock?**
+
+| Answer | Procedure | Effect |
+|---|---|---|
+| **Yes — Macgear buys it (DEFAULT / majority case)** | **VRMA on the vendor (customer-as-supplier) account**, then a **normal-price PO** into the regular warehouse | $0 VRMA clears the 3PL receipt and removes it from the customer's held inventory; the buy-in PO brings it onto Macgear's books as owned stock at cost. Fulfilment source = **VRMA**. |
+| No — just dispatching the customer's goods on their behalf | **$0 Sales Order on the customer account** | Pure logistics, ownership stays with the customer. Fulfilment source = **SO**. |
+
+**Failure mode to avoid:** using an SO when Macgear is actually purchasing ships the stock off the
+customer's 3PL holding but brings **nothing onto Macgear's books** → phantom inventory + unrecognised
+COGS. When Macgear is buying, always use **VRMA + buy-in PO**. The VRMA fulfilment is captured off the
+inventory **ASSET line** (single negative line, no positive counterpart — see `netsuite_validation.md`);
+the old "sum positives only" rule dropped VRMAs entirely.
+
 ## Sync design
 
 - **Mechanism:** NetSuite REST/SuiteQL via Token-Based Auth (TBA), pulled on a schedule into Postgres.
