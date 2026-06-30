@@ -107,28 +107,32 @@ SELECT t.id, t.tranid, t.trandate, BUILTIN.DF(t.status) status, t.foreigntotal t
 FROM transaction t WHERE t.type='CustInvc' AND t.entity=:cust ORDER BY t.trandate DESC
 ```
 
-**Container-unload charge + Stock-on-order link — inbound shipments:**
+**Container-unload charge + Stock-on-order link — inbound shipments (VALIDATED 2026-06-30):**
+Run against production (NANOLEAF brand, class 31, which has real inbound shipments). Key gotchas:
+`shipmentstatus` is **already a text label** ('received') — do NOT wrap in `BUILTIN.DF`.
+`inboundshipmentitem` has **no `item` column**: reach the PO line (hence item) via
+`shipmentitemtransaction = transactionline.uniquekey`, and the PO header via `purchaseordertransaction`.
+The shipment→item FK column is `inboundshipment` (not `shipment`). Implemented in RESTlet `inbound_shipments`.
 ```sql
--- inboundshipment table confirmed (87 rows acct-wide). Implemented best-effort in the RESTlet
--- (action `inbound_shipments`); the column/table names below are UNVALIDATED guesses and must be
--- confirmed against a real Mova shipment. The member-line query is wrapped in its own try/catch
--- so a wrong name there still returns headers. Skriva has no inbound shipments to test against.
--- Headers (per brand):
-SELECT id, shipmentnumber, expecteddeliverydate, actualdeliverydate,
-       BUILTIN.DF(shipmentstatus) status FROM inboundshipment
-WHERE id IN (SELECT isi.shipment FROM inboundshipmentitem isi
-             JOIN item i ON i.id=isi.item WHERE i.class=:class)
--- Member lines (PO + item per shipment — feeds PoLine.ns_inbound_shipment + expected receipt):
-SELECT isi.shipment, isi.item, po.tranid po_tranid FROM inboundshipmentitem isi
-JOIN item i ON i.id=isi.item LEFT JOIN transaction po ON po.id=isi.purchaseorder
-WHERE i.class=:class
+-- Member lines (shipment id + PO doc + item — feeds PoLine.ns_inbound_shipment + expected receipt):
+SELECT isi.inboundshipment shipment, po.tranid po_tranid, tl.item
+FROM inboundshipmentitem isi
+JOIN transactionline tl ON tl.uniquekey = isi.shipmentitemtransaction
+JOIN item i ON i.id = tl.item
+LEFT JOIN transaction po ON po.id = isi.purchaseordertransaction
+WHERE i.class = :class
+-- Headers for the shipment ids found above (dates are dd/mm/yyyy):
+SELECT id, shipmentnumber, expecteddeliverydate, actualdeliverydate, shipmentstatus status
+FROM inboundshipment WHERE id IN (:shipment_ids)
 ```
+No native `container_type` field exists on `inboundshipment` (returned as null; the unload charge
+counts containers regardless). Other header fields available if needed: `externaldocumentnumber`,
+`billoflading`, `expectedshippingdate`, `actualshippingdate`, `vesselnumber`, `shipmentcreateddate`.
 
 ## Remaining TODO (need Mova data, ~end Jul 2026)
 1. Confirm Mova item `custitem_pallet_quantity` is the units/pallet field and is populated.
-2. `inboundshipment` field names (RESTlet `inbound_shipments` ships best-effort guesses — confirm
-   & correct): `shipmentnumber`, `expecteddeliverydate`, `actualdeliverydate`, `shipmentstatus`,
-   and the `inboundshipmentitem` member table (`shipment`, `item`, `purchaseorder`) used for the
-   Stock-on-order PO→shipment link. Also confirm `container_type` source for the unload charge.
+2. ~~`inboundshipment` field names~~ **DONE (2026-06-30)** — validated against production; RESTlet
+   `inbound_shipments` query corrected. Still worth a final smoke-test against the first real **Mova**
+   shipment once one exists (class 253), as the queries were proven on the NANOLEAF brand.
 3. First real VRMA fulfilment to confirm the entity-based SO/VRMA discriminator on Mova.
 4. Confirm Mova's exact class id on items is `253` (vs `237`/`231`).

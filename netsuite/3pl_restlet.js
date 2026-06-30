@@ -149,34 +149,38 @@ define(['N/query', 'N/record'], function (query, record) {
 
   function inboundShipments(p) {
     // Inbound shipments (containers) for this customer's brand. Drives the container-unload
-    // charge AND (via member lines) the inbound-shipment + expected-receipt columns shown on
-    // the portal's Stock on order view.
+    // charge AND (via member lines) the inbound-shipment + expected-receipt columns on the
+    // portal's Stock on order view.
     //
-    // FIELD NAMES UNVALIDATED: no Mova inbound shipment exists yet (~end Jul 2026) and the REST
-    // metadata catalog is 403, so the table/column names below are best-effort from the NetSuite
-    // schema and MUST be confirmed against a real Mova shipment (see docs/netsuite_validation.md
-    // TODO #2). Each piece is isolated so a wrong name degrades gracefully rather than failing the
-    // whole sync: headers from `inboundshipment`; member lines (po + item, for the PO link) from
-    // `inboundshipmentitem`, in their own try/catch so headers still return if that name is wrong.
+    // VALIDATED against production schema 2026-06-30 (see docs/netsuite_validation.md):
+    //  - inboundshipment header fields: shipmentnumber, expecteddeliverydate, actualdeliverydate,
+    //    and shipmentstatus (already a TEXT label like 'received' — do NOT wrap in BUILTIN.DF).
+    //  - inboundshipmentitem has NO `item` column: the PO line (and thus the item) is reached via
+    //    shipmentitemtransaction = transactionline.uniquekey; the PO header via purchaseordertransaction.
+    //  - scope by the item's brand class (i.class) — same per-customer isolation as the other reads.
+    var cls = Number(p.ns_class_id);
+    // Member lines: shipment id + PO doc number + item, for the Stock-on-order PO->shipment link.
+    var members = runSuiteQL(
+      "SELECT isi.inboundshipment shipment, po.tranid po_tranid, tl.item " +
+      "FROM inboundshipmentitem isi " +
+      "JOIN transactionline tl ON tl.uniquekey = isi.shipmentitemtransaction " +
+      "JOIN item i ON i.id = tl.item " +
+      "LEFT JOIN transaction po ON po.id = isi.purchaseordertransaction " +
+      "WHERE i.class = " + cls);
+    var membersByShip = {}, ids = {};
+    members.forEach(function (m) {
+      var k = String(m.shipment); ids[k] = true;
+      (membersByShip[k] = membersByShip[k] || []).push(
+        { ns_item_id: String(m.item), po_tranid: m.po_tranid || null });
+    });
+    var idList = Object.keys(ids);
+    if (!idList.length) return [];
     var heads = runSuiteQL(
-      "SELECT id, shipmentnumber, expecteddeliverydate, actualdeliverydate, " +
-      "BUILTIN.DF(shipmentstatus) status FROM inboundshipment " +
-      "WHERE id IN (SELECT isi.shipment FROM inboundshipmentitem isi " +
-      "JOIN item i ON i.id=isi.item WHERE i.class=" + Number(p.ns_class_id) + ")");
-    var membersByShip = {};
-    try {
-      runSuiteQL(
-        "SELECT isi.shipment, isi.item, po.tranid po_tranid FROM inboundshipmentitem isi " +
-        "JOIN item i ON i.id=isi.item LEFT JOIN transaction po ON po.id=isi.purchaseorder " +
-        "WHERE i.class=" + Number(p.ns_class_id)
-      ).forEach(function (m) {
-        var k = String(m.shipment);
-        (membersByShip[k] = membersByShip[k] || []).push(
-          { ns_item_id: String(m.item), po_tranid: m.po_tranid || null });
-      });
-    } catch (e) { /* member-link field names unconfirmed — headers still return */ }
+      "SELECT id, shipmentnumber, expecteddeliverydate, actualdeliverydate, shipmentstatus status " +
+      "FROM inboundshipment WHERE id IN (" + idList.join(',') + ")");
     return heads.map(function (h) {
       return { ns_shipment_id: String(h.id), shipment_number: h.shipmentnumber,
+               container_type: null,  // no native container-type field on inboundshipment
                expected_date: h.expecteddeliverydate, received_date: h.actualdeliverydate,
                status: h.status, lines: membersByShip[String(h.id)] || [] };
     });
