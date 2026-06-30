@@ -53,26 +53,33 @@ def _seed_mova_demo(db, mova):
     db.add_all(items)
 
     # Inbound shipments (containers) — two received this month, one still in transit.
+    # The in-transit one (ISMOV0003) carries the outstanding PO stock + its expected receipt date.
     db.add_all([
         InboundShipment(customer_id=mova.id, ns_shipment_id="IS5001",
                         shipment_number="ISMOV0001", container_type="40ft loose stacked",
+                        expected_date=date(2026, 6, 8),
                         received_date=date(2026, 6, 8), status="received"),
         InboundShipment(customer_id=mova.id, ns_shipment_id="IS5002",
                         shipment_number="ISMOV0002", container_type="40ft loose stacked",
+                        expected_date=date(2026, 6, 22),
                         received_date=date(2026, 6, 22), status="received"),
         InboundShipment(customer_id=mova.id, ns_shipment_id="IS5003",
                         shipment_number="ISMOV0003", container_type="40ft loose stacked",
+                        expected_date=date(2026, 7, 18),
                         received_date=None, status="in transit"),
     ])
 
-    # Open PO (stock on order) — partially received.
+    # Open PO (stock on order) — partially received. The first line's outstanding qty has
+    # been added to the in-transit shipment ISMOV0003 (so it shows the shipment + its ETA);
+    # the second line isn't on a shipment yet (falls back to its own expected date).
     po = PurchaseOrder(customer_id=mova.id, ns_po_id="PO7001", tranid="POAU010001",
                        trandate=date(2026, 5, 30), status="open")
     db.add(po)
     db.flush()
     db.add_all([
         PoLine(purchase_order_id=po.id, ns_item_id="90001", qty_ordered=10000,
-               qty_received=6000, expected_date=date(2026, 7, 15)),
+               qty_received=6000, expected_date=date(2026, 7, 15),
+               ns_inbound_shipment="ISMOV0003"),
         PoLine(purchase_order_id=po.id, ns_item_id="90002", qty_ordered=5000,
                qty_received=0, expected_date=date(2026, 7, 28)),
     ])

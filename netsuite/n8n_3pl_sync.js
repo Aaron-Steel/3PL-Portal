@@ -37,9 +37,11 @@ const SINCE           = '2025-01-01';                // incremental floor for da
 let MODE = 'full';
 try { const inp = $input.first(); if (inp && inp.json && inp.json.mode) MODE = String(inp.json.mode); } catch (e) {}
 const FAST = MODE === 'soh';
+// inbound_shipments runs AFTER purchase_orders: it stamps the PO->shipment link onto PO lines
+// (which the purchase_orders ingest rebuilds each run), so the order matters.
 const READ_ENTITIES = FAST
   ? ['stock_on_hand']
-  : ['items', 'invoices', 'purchase_orders', 'item_receipts',
+  : ['items', 'invoices', 'purchase_orders', 'inbound_shipments', 'item_receipts',
      'item_fulfilments', 'stock_on_hand'];
 const DO_WRITES = !FAST;   // billing draft-invoice push runs on the full lane only
 // charge_type -> NetSuite item internalid (for draft-invoice lines on push). Sandbox items.

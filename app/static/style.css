@@ -173,6 +173,15 @@ main{display:flex;flex-direction:column;min-width:0}
 .wl.total{font-size:15px;font-weight:700;border-bottom:0;padding-top:10px}
 .wl.total .num{color:var(--brand)}
 
+/* table toolbar — filter + CSV export */
+.ttools{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line-2);background:var(--surface-2)}
+.ttools .tsearch{display:flex;align-items:center;gap:7px;flex:1;max-width:300px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--muted)}
+.ttools .tsearch input{border:0;outline:0;background:transparent;color:var(--ink);font-size:13px;width:100%}
+.ttools .tsearch input::placeholder{color:var(--muted)}
+.ttools .btn-export{display:inline-flex;align-items:center;gap:6px;margin-left:auto;padding:7px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink-2);cursor:pointer;font-size:12.5px;font-weight:600;white-space:nowrap}
+.ttools .btn-export:hover{background:var(--brand-tint-2);color:var(--brand-ink)}
+td .muted2,.muted2{color:var(--muted)}
+
 /* table */
 .tablewrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px}

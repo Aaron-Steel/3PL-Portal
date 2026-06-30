@@ -32,7 +32,9 @@ def _ensure_columns():
     `synced_at` column would be missing on the existing SQLite/Postgres dbs. Both engines
     accept `ALTER TABLE ... ADD COLUMN`; we only add when absent."""
     additions = {"stock_on_hand": {"synced_at": "TIMESTAMP"},
-                 "item_receipt": {"po_tranid": "VARCHAR"}}
+                 "item_receipt": {"po_tranid": "VARCHAR"},
+                 "po_line": {"ns_inbound_shipment": "VARCHAR"},
+                 "inbound_shipment": {"expected_date": "DATE"}}
     insp = inspect(engine)
     with engine.begin() as conn:
         for table, cols in additions.items():

@@ -1,5 +1,18 @@
 {% extends "base.html" %}
 {% block title %}{{ title }} — {{ customer.name }} — Macgear 3PL{% endblock %}
+{# Filter box + CSV export for a data table. tid = the <table> id; csv = download filename stem. #}
+{% macro tabletools(tid, csv) %}
+<div class="ttools">
+  <div class="tsearch">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <input type="search" placeholder="Filter…" oninput="filterTable('{{ tid }}', this.value)" aria-label="Filter table">
+  </div>
+  <button type="button" class="btn-export" onclick="exportCSV('{{ tid }}', '{{ csv }}')" title="Download visible rows as CSV">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Export CSV
+  </button>
+</div>
+{% endmacro %}
 {% block body %}
 <div class="app">
   <aside class="side">
@@ -113,19 +126,22 @@
     {% elif view == "stock_on_order" %}
       {% set tot_out = rows|sum(attribute='outstanding') %}
       <div class="card"><header><h3>Open purchase orders</h3><span class="hint">keyed at $0 — customer retains ownership</span></header>
-        <div class="tablewrap"><table>
-          <thead><tr><th>PO</th><th>Item</th><th class="r">Ordered</th><th class="r">Received</th><th class="r">Outstanding</th><th>Expected</th><th>Status</th></tr></thead>
+        {{ tabletools('tbl-soo', customer.slug ~ '-stock-on-order') }}
+        <div class="tablewrap"><table id="tbl-soo">
+          <thead><tr><th>PO</th><th>Item</th><th>Inbound shipment</th><th class="r">Ordered</th><th class="r">Received</th><th class="r">Outstanding</th><th>Expected receipt</th><th>Status</th></tr></thead>
           <tbody>{% for r in rows %}<tr><td><span class="id">{{ r.tranid }}</span></td><td class="prim">{{ r.sku }}</td>
+            <td>{% if r.shipment %}<span class="id">{{ r.shipment }}</span>{% if r.shipment_status %} <span class="chip {{ r.shipment_status|chip }}">{{ r.shipment_status }}</span>{% endif %}{% else %}<span class="muted2">—</span>{% endif %}</td>
             <td class="r num">{{ r.ordered|qty }}</td><td class="r num">{{ r.received|qty }}</td><td class="r num">{{ r.outstanding|qty }}</td>
             <td>{{ r.expected|dshort }}</td><td><span class="chip {{ r.status|chip }}">{{ r.status }}</span></td></tr>
-          {% else %}<tr><td class="empty" colspan="7">No open purchase orders.</td></tr>{% endfor %}</tbody>
-          {% if rows %}<tfoot><tr><td colspan="4">{{ rows|map(attribute='tranid')|unique|list|length }} open</td><td class="r">{{ tot_out|qty }}</td><td colspan="2"></td></tr></tfoot>{% endif %}
+          {% else %}<tr><td class="empty" colspan="8">No open purchase orders.</td></tr>{% endfor %}</tbody>
+          {% if rows %}<tfoot><tr><td colspan="5">{{ rows|map(attribute='tranid')|unique|list|length }} open</td><td class="r">{{ tot_out|qty }}</td><td colspan="2"></td></tr></tfoot>{% endif %}
         </table></div>
       </div>
 
     {% elif view == "item_receipts" %}
       <div class="card"><header><h3>Item receipts</h3><span class="hint">against 3PL location · brand {{ customer.brand_label }}</span></header>
-        <div class="tablewrap"><table>
+        {{ tabletools('tbl-rcpt', customer.slug ~ '-item-receipts') }}
+        <div class="tablewrap"><table id="tbl-rcpt">
           <thead><tr><th>Receipt</th><th>PO</th><th>Inbound shipment</th><th>SKU</th><th>Description</th><th class="r">Qty</th><th>Date</th></tr></thead>
           <tbody>{% for r in rows %}<tr><td><span class="id">{{ r.tranid }}</span></td><td><span class="id">{{ r.po or '—' }}</span></td><td><span class="id">{{ r.shipment or '—' }}</span></td>
             <td><span class="id">{{ r.sku }}</span></td><td class="prim">{{ r.name }}</td><td class="r num">{{ r.qty|qty }}</td><td>{{ r.trandate|dshort }}</td></tr>
@@ -136,7 +152,8 @@
 
     {% elif view == "stock_on_hand" %}
       <div class="card"><header><h3>Stock on hand</h3><span class="hint">{{ customer.location_label }}{% if soh_synced_at %} · <span class="live">● live</span> · updated {{ soh_synced_at|ago }}{% endif %}</span></header>
-        <div class="tablewrap"><table>
+        {{ tabletools('tbl-soh', customer.slug ~ '-stock-on-hand') }}
+        <div class="tablewrap"><table id="tbl-soh">
           <thead><tr><th>SKU</th><th>Description</th><th class="r">On hand</th><th class="r">Units / pallet</th><th class="r">Pallets</th><th class="r">Storage / wk</th></tr></thead>
           <tbody>{% for r in rows %}<tr><td><span class="id">{{ r.sku }}</span></td><td class="prim">{{ r.name }}</td>
             <td class="r num">{{ r.qty_on_hand|qty }}</td><td class="r num">{{ r.units_per_pallet }}</td><td class="r num">{{ r.pallets|qty }}</td>
@@ -149,7 +166,8 @@
 
     {% elif view == "fulfilments" %}
       <div class="card"><header><h3>Fulfilments</h3><span class="hint">sales orders + VRMA transfers · drives per-unit pick fee</span></header>
-        <div class="tablewrap"><table>
+        {{ tabletools('tbl-ful', customer.slug ~ '-fulfilments') }}
+        <div class="tablewrap"><table id="tbl-ful">
           <thead><tr><th>Fulfilment</th><th>Type</th><th>Source</th><th>Item</th><th class="r">Qty</th><th>Date</th></tr></thead>
           <tbody>{% for r in rows %}<tr><td><span class="id">{{ r.tranid }}</span></td>
             <td>{% if r.source == 'VRMA' %}<span class="tag vrma">VRMA</span>{% else %}<span class="tag so">SO</span>{% endif %}</td>
@@ -180,12 +198,13 @@
 
     {% elif view == "invoices" %}
       <div class="card"><header><h3>Invoices</h3><span class="hint">3PL service charges on your account · click to view detail</span></header>
-        <div class="tablewrap"><table>
-          <thead><tr><th>Invoice</th><th>Date</th><th class="r">Amount</th><th>Status</th><th></th></tr></thead>
+        {{ tabletools('tbl-inv', customer.slug ~ '-invoices') }}
+        <div class="tablewrap"><table id="tbl-inv">
+          <thead><tr><th>Invoice</th><th>Date</th><th class="r">Amount</th><th>Status</th><th class="noexport"></th></tr></thead>
           <tbody>{% for r in rows %}<tr class="clickrow" onclick="location.href='/c/{{ customer.slug }}/invoice/{{ r.id }}'">
             <td><a class="id idlink" href="/c/{{ customer.slug }}/invoice/{{ r.id }}">{{ r.tranid }}</a></td><td>{{ r.trandate|dshort }}</td>
             <td class="r num">${{ r.total|money }}</td><td><span class="chip {{ r.status|chip }}">{{ r.status }}</span></td>
-            <td class="r chev">›</td></tr>
+            <td class="r chev noexport">›</td></tr>
           {% else %}<tr><td class="empty" colspan="5">No invoices.</td></tr>{% endfor %}</tbody>
           {% if rows %}<tfoot><tr><td colspan="2">{{ rows|length }} invoices</td><td class="r">${{ rows|sum(attribute='total')|money }}</td><td colspan="2"></td></tr></tfoot>{% endif %}
         </table></div>
@@ -262,5 +281,53 @@
   </main>
   <div class="scrim" onclick="toggleNav()"></div>
 </div>
-<script>function toggleNav(){document.querySelector('.app').classList.toggle('navopen')}</script>
+<script>
+function toggleNav(){document.querySelector('.app').classList.toggle('navopen')}
+
+// Client-side row filter for a data table. Hides non-matching rows; while a filter is
+// active the totals footer is hidden (it sums the full set, not the visible rows).
+function filterTable(id, q){
+  q = (q || '').trim().toLowerCase();
+  var t = document.getElementById(id); if(!t || !t.tBodies[0]) return;
+  var rows = t.tBodies[0].rows, shown = 0;
+  for(var i=0;i<rows.length;i++){
+    var row = rows[i];
+    if(row.querySelector('.empty')){ continue; }      // empty-state row
+    var match = !q || row.textContent.toLowerCase().indexOf(q) !== -1;
+    row.style.display = match ? '' : 'none';
+    if(match) shown++;
+  }
+  if(t.tFoot) t.tFoot.style.display = q ? 'none' : '';
+}
+
+// Export the table's currently-visible (filtered) rows to a CSV file. Cells marked
+// .noexport (e.g. the chevron column) are skipped.
+function exportCSV(id, name){
+  var t = document.getElementById(id); if(!t) return;
+  function cells(tr){
+    var out = [];
+    for(var i=0;i<tr.cells.length;i++){
+      var c = tr.cells[i];
+      if(c.classList.contains('noexport')) continue;
+      var txt = c.textContent.replace(/\s+/g,' ').trim();
+      out.push('"' + txt.replace(/"/g,'""') + '"');
+    }
+    return out.join(',');
+  }
+  var lines = [];
+  if(t.tHead && t.tHead.rows[0]) lines.push(cells(t.tHead.rows[0]));
+  var rows = t.tBodies[0] ? t.tBodies[0].rows : [];
+  for(var i=0;i<rows.length;i++){
+    var row = rows[i];
+    if(row.style.display === 'none' || row.querySelector('.empty')) continue;
+    lines.push(cells(row));
+  }
+  var blob = new Blob(['﻿' + lines.join('\r\n')], {type:'text/csv;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = (name || id) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+</script>
 {% endblock %}

@@ -96,6 +96,9 @@ class PoLine(Base):
     qty_ordered: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     qty_received: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     expected_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Inbound shipment (container) this line has been added to, if any — its doc number.
+    # The shipment carries the authoritative expected-receipt date (InboundShipment.expected_date).
+    ns_inbound_shipment: Mapped[str | None] = mapped_column(String, nullable=True)
     po: Mapped["PurchaseOrder"] = relationship(back_populates="lines")
 
 
@@ -106,6 +109,7 @@ class InboundShipment(Base):
     ns_shipment_id: Mapped[str] = mapped_column(String, unique=True)
     shipment_number: Mapped[str | None] = mapped_column(String, nullable=True)
     container_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    expected_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # expected receipt/delivery
     received_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str | None] = mapped_column(String, nullable=True)
     ns_lastmodified: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

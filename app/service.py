@@ -41,17 +41,29 @@ def stock_on_order(db: Session, customer_id: int, imap: dict) -> list[dict]:
         select(PurchaseOrder).where(PurchaseOrder.customer_id == customer_id,
                                     PurchaseOrder.status != "closed")
         .order_by(PurchaseOrder.trandate.desc())).all()
+    # A PO line that's been added to an inbound shipment (container) gets the shipment's
+    # doc number + its (authoritative) expected-receipt date and status surfaced here.
+    shipments = {s.shipment_number: s for s in db.scalars(
+        select(InboundShipment).where(InboundShipment.customer_id == customer_id)).all()
+        if s.shipment_number}
     out = []
     for po in pos:
         for l in po.lines:
             outstanding = float(l.qty_ordered or 0) - float(l.qty_received or 0)
             if outstanding <= 0:
                 continue
+            ship = shipments.get(l.ns_inbound_shipment) if l.ns_inbound_shipment else None
+            # Prefer the shipment's expected date once the line is on a container;
+            # else fall back to the PO line's own expected date.
+            expected = (ship.expected_date if ship and ship.expected_date
+                        else l.expected_date)
             out.append({"tranid": po.tranid, "trandate": po.trandate, "status": po.status,
                         "sku": imap.get(l.ns_item_id, l.ns_item_id),
                         "ordered": float(l.qty_ordered or 0),
                         "received": float(l.qty_received or 0),
-                        "outstanding": outstanding, "expected": l.expected_date})
+                        "outstanding": outstanding, "expected": expected,
+                        "shipment": l.ns_inbound_shipment,
+                        "shipment_status": ship.status if ship else None})
     return out
 
 

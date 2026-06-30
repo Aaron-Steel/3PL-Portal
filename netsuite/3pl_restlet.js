@@ -147,6 +147,41 @@ define(['N/query', 'N/record'], function (query, record) {
     });
   }
 
+  function inboundShipments(p) {
+    // Inbound shipments (containers) for this customer's brand. Drives the container-unload
+    // charge AND (via member lines) the inbound-shipment + expected-receipt columns shown on
+    // the portal's Stock on order view.
+    //
+    // FIELD NAMES UNVALIDATED: no Mova inbound shipment exists yet (~end Jul 2026) and the REST
+    // metadata catalog is 403, so the table/column names below are best-effort from the NetSuite
+    // schema and MUST be confirmed against a real Mova shipment (see docs/netsuite_validation.md
+    // TODO #2). Each piece is isolated so a wrong name degrades gracefully rather than failing the
+    // whole sync: headers from `inboundshipment`; member lines (po + item, for the PO link) from
+    // `inboundshipmentitem`, in their own try/catch so headers still return if that name is wrong.
+    var heads = runSuiteQL(
+      "SELECT id, shipmentnumber, expecteddeliverydate, actualdeliverydate, " +
+      "BUILTIN.DF(shipmentstatus) status FROM inboundshipment " +
+      "WHERE id IN (SELECT isi.shipment FROM inboundshipmentitem isi " +
+      "JOIN item i ON i.id=isi.item WHERE i.class=" + Number(p.ns_class_id) + ")");
+    var membersByShip = {};
+    try {
+      runSuiteQL(
+        "SELECT isi.shipment, isi.item, po.tranid po_tranid FROM inboundshipmentitem isi " +
+        "JOIN item i ON i.id=isi.item LEFT JOIN transaction po ON po.id=isi.purchaseorder " +
+        "WHERE i.class=" + Number(p.ns_class_id)
+      ).forEach(function (m) {
+        var k = String(m.shipment);
+        (membersByShip[k] = membersByShip[k] || []).push(
+          { ns_item_id: String(m.item), po_tranid: m.po_tranid || null });
+      });
+    } catch (e) { /* member-link field names unconfirmed — headers still return */ }
+    return heads.map(function (h) {
+      return { ns_shipment_id: String(h.id), shipment_number: h.shipmentnumber,
+               expected_date: h.expecteddeliverydate, received_date: h.actualdeliverydate,
+               status: h.status, lines: membersByShip[String(h.id)] || [] };
+    });
+  }
+
   function sinceExpr(since) {
     // since = 'YYYY-MM-DD' (default 2020-01-01); SuiteQL date literal
     var d = (since && /^\d{4}-\d{2}-\d{2}$/.test(since)) ? since : '2020-01-01';
@@ -179,8 +214,8 @@ define(['N/query', 'N/record'], function (query, record) {
     items: items,
     invoices: invoices, purchase_orders: purchaseOrders, item_receipts: itemReceipts,
     item_fulfilments: itemFulfilments, stock_on_hand: stockOnHand,
+    inbound_shipments: inboundShipments,
     create_invoice: createInvoice
-    // inbound_shipments: TODO — confirm inboundshipment field names against real Mova data.
   };
 
   function post(body) {

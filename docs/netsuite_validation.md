@@ -107,15 +107,28 @@ SELECT t.id, t.tranid, t.trandate, BUILTIN.DF(t.status) status, t.foreigntotal t
 FROM transaction t WHERE t.type='CustInvc' AND t.entity=:cust ORDER BY t.trandate DESC
 ```
 
-**Container-unload charge — inbound shipments received in period:**
+**Container-unload charge + Stock-on-order link — inbound shipments:**
 ```sql
--- inboundshipment table confirmed (87 rows acct-wide). TODO: confirm customer link + received-date/status
--- field names against a real Mova inbound shipment; Skriva has none to test against.
-SELECT * FROM inboundshipment WHERE ... -- validate fields when Mova data exists
+-- inboundshipment table confirmed (87 rows acct-wide). Implemented best-effort in the RESTlet
+-- (action `inbound_shipments`); the column/table names below are UNVALIDATED guesses and must be
+-- confirmed against a real Mova shipment. The member-line query is wrapped in its own try/catch
+-- so a wrong name there still returns headers. Skriva has no inbound shipments to test against.
+-- Headers (per brand):
+SELECT id, shipmentnumber, expecteddeliverydate, actualdeliverydate,
+       BUILTIN.DF(shipmentstatus) status FROM inboundshipment
+WHERE id IN (SELECT isi.shipment FROM inboundshipmentitem isi
+             JOIN item i ON i.id=isi.item WHERE i.class=:class)
+-- Member lines (PO + item per shipment — feeds PoLine.ns_inbound_shipment + expected receipt):
+SELECT isi.shipment, isi.item, po.tranid po_tranid FROM inboundshipmentitem isi
+JOIN item i ON i.id=isi.item LEFT JOIN transaction po ON po.id=isi.purchaseorder
+WHERE i.class=:class
 ```
 
 ## Remaining TODO (need Mova data, ~end Jul 2026)
 1. Confirm Mova item `custitem_pallet_quantity` is the units/pallet field and is populated.
-2. `inboundshipment` field names: customer/vendor link, container type, received date & status.
+2. `inboundshipment` field names (RESTlet `inbound_shipments` ships best-effort guesses — confirm
+   & correct): `shipmentnumber`, `expecteddeliverydate`, `actualdeliverydate`, `shipmentstatus`,
+   and the `inboundshipmentitem` member table (`shipment`, `item`, `purchaseorder`) used for the
+   Stock-on-order PO→shipment link. Also confirm `container_type` source for the unload charge.
 3. First real VRMA fulfilment to confirm the entity-based SO/VRMA discriminator on Mova.
 4. Confirm Mova's exact class id on items is `253` (vs `237`/`231`).

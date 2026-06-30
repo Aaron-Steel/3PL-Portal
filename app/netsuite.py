@@ -93,7 +93,8 @@ def ingest_invoices(db: Session, c: Customer, rows: list[dict]) -> int:
 
 def ingest_purchase_orders(db: Session, c: Customer, rows: list[dict]) -> int:
     """rows: [{ns_po_id, tranid, trandate, status,
-              lines:[{ns_item_id, qty_ordered, qty_received, expected_date}]}]
+              lines:[{ns_item_id, qty_ordered, qty_received, expected_date,
+                      ns_inbound_shipment?}]}]
 
     REPLACE SEMANTICS: the RESTlet returns the full set of *open* POs (lines with
     quantityshiprecv < quantity), with no incremental floor — so this list is the complete
@@ -116,7 +117,8 @@ def ingest_purchase_orders(db: Session, c: Customer, rows: list[dict]) -> int:
             db.add(PoLine(purchase_order_id=po.id, ns_item_id=str(ln["ns_item_id"]),
                           qty_ordered=_num(ln.get("qty_ordered")),
                           qty_received=_num(ln.get("qty_received")),
-                          expected_date=_date(ln.get("expected_date"))))
+                          expected_date=_date(ln.get("expected_date")),
+                          ns_inbound_shipment=ln.get("ns_inbound_shipment")))
     # Drop POs that are no longer open (fully received/closed → absent from the pull).
     for po in db.scalars(select(PurchaseOrder).where(
             PurchaseOrder.customer_id == c.id)).all():
@@ -161,12 +163,30 @@ def ingest_item_fulfilments(db: Session, c: Customer, rows: list[dict]) -> int:
 
 
 def ingest_inbound_shipments(db: Session, c: Customer, rows: list[dict]) -> int:
-    """rows: [{ns_shipment_id, shipment_number, container_type, received_date, status}]"""
+    """rows: [{ns_shipment_id, shipment_number, container_type, expected_date,
+              received_date, status, lines?:[{ns_item_id, po_tranid}]}]
+
+    Member `lines` are optional and link the shipment back to the PO lines it contains, so the
+    Stock-on-order view can show each open line's inbound shipment + expected receipt date. This
+    stamps PoLine.ns_inbound_shipment, so it must run AFTER purchase_orders in the sync (which
+    rebuilds PO lines each run); the n8n READ_ENTITIES order ensures that.
+    """
     for r in rows:
         _upsert(db, InboundShipment, "ns_shipment_id", str(r["ns_shipment_id"]),
                 customer_id=c.id, shipment_number=r.get("shipment_number"),
                 container_type=r.get("container_type"),
+                expected_date=_date(r.get("expected_date")),
                 received_date=_date(r.get("received_date")), status=r.get("status"))
+        num = r.get("shipment_number")
+        for m in r.get("lines", []):
+            po_tranid, ns_item = m.get("po_tranid"), str(m.get("ns_item_id") or "")
+            if not (num and po_tranid and ns_item):
+                continue
+            line = db.scalar(select(PoLine).join(PurchaseOrder).where(
+                PurchaseOrder.customer_id == c.id, PurchaseOrder.tranid == po_tranid,
+                PoLine.ns_item_id == ns_item))
+            if line:
+                line.ns_inbound_shipment = num
     return len(rows)
 
 
