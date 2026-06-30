@@ -129,6 +129,14 @@ No native `container_type` field exists on `inboundshipment` (returned as null; 
 counts containers regardless). Other header fields available if needed: `externaldocumentnumber`,
 `billoflading`, `expectedshippingdate`, `actualshippingdate`, `vesselnumber`, `shipmentcreateddate`.
 
+**Container-unload trigger date (important):** `actualdeliverydate` is populated on only **2 of 78**
+received shipments account-wide — useless as the "received" trigger. `shipmentstatus` is the reliable
+signal (values: `received` / `partiallyReceived` / `inTransit`). So the RESTlet sets `received_date`
+= `actualdeliverydate || lastmodifieddate` **only** for received/partiallyReceived shipments (both
+date fields are 100% populated); in-transit shipments get null and aren't billed. `billing.py` counts
+shipments with `received_date` in the period. Caveat: `lastmodifieddate` moves if a received shipment
+is later edited, and a partiallyReceived→received transition re-dates it — re-run affected periods.
+
 ## Remaining TODO (need Mova data, ~end Jul 2026)
 1. Confirm Mova item `custitem_pallet_quantity` is the units/pallet field and is populated.
 2. ~~`inboundshipment` field names~~ **DONE (2026-06-30)** — validated against production; RESTlet

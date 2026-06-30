@@ -176,13 +176,26 @@ define(['N/query', 'N/record'], function (query, record) {
     var idList = Object.keys(ids);
     if (!idList.length) return [];
     var heads = runSuiteQL(
-      "SELECT id, shipmentnumber, expecteddeliverydate, actualdeliverydate, shipmentstatus status " +
-      "FROM inboundshipment WHERE id IN (" + idList.join(',') + ")");
+      "SELECT id, shipmentnumber, expecteddeliverydate, actualdeliverydate, " +
+      "lastmodifieddate, shipmentstatus FROM inboundshipment WHERE id IN (" + idList.join(',') + ")");
+    // received_date drives the weekly container-unload charge (billing.py counts shipments
+    // received in the period). VALIDATED 2026-06-30: actualdeliverydate is populated on only
+    // ~3% of received shipments, so it's useless as the trigger. Instead a shipment counts as
+    // received when its STATUS says so (received | partiallyReceived), dated by actualdeliverydate
+    // or, failing that, lastmodifieddate (both 100% reliable) as the proxy for when it was marked
+    // received. in-transit shipments get no received_date, so they aren't charged until they land.
+    // Caveat: editing a received shipment later moves lastmodifieddate; a partiallyReceived ->
+    // received transition in a later week re-dates it to that week (re-run the affected periods).
+    var STATUS = { received: 'received', partiallyReceived: 'partially received',
+                   inTransit: 'in transit' };
     return heads.map(function (h) {
+      var isReceived = h.shipmentstatus === 'received' || h.shipmentstatus === 'partiallyReceived';
       return { ns_shipment_id: String(h.id), shipment_number: h.shipmentnumber,
                container_type: null,  // no native container-type field on inboundshipment
-               expected_date: h.expecteddeliverydate, received_date: h.actualdeliverydate,
-               status: h.status, lines: membersByShip[String(h.id)] || [] };
+               expected_date: h.expecteddeliverydate,
+               received_date: isReceived ? (h.actualdeliverydate || h.lastmodifieddate) : null,
+               status: STATUS[h.shipmentstatus] || h.shipmentstatus,
+               lines: membersByShip[String(h.id)] || [] };
     });
   }
 

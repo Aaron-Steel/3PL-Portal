@@ -84,6 +84,10 @@ def compute_billing(db: Session, customer: Customer,
                                   amount, rc.basis, refs))
 
     # --- container unload: inbound shipments received in period ---------------
+    # `received_date` is set by the RESTlet only once a shipment's status is received/
+    # partiallyReceived (sourced actualdeliverydate -> lastmodifieddate, since NetSuite barely
+    # populates actualdeliverydate). In-transit shipments have no received_date, so the filter
+    # below naturally excludes them — they aren't charged until they land. See 3pl_restlet.js.
     shipments = db.scalars(
         select(InboundShipment).where(
             InboundShipment.customer_id == customer.id,
