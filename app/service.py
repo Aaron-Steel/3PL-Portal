@@ -36,7 +36,9 @@ def storage_rate(db: Session, customer_id: int) -> float:
 
 
 # --- the 6 views -------------------------------------------------------------
-def stock_on_order(db: Session, customer_id: int, imap: dict) -> list[dict]:
+def stock_on_order(db: Session, customer_id: int, imap: dict,
+                   names: dict | None = None) -> list[dict]:
+    names = names or {}
     pos = db.scalars(
         select(PurchaseOrder).where(PurchaseOrder.customer_id == customer_id,
                                     PurchaseOrder.status != "closed")
@@ -59,6 +61,7 @@ def stock_on_order(db: Session, customer_id: int, imap: dict) -> list[dict]:
                         else l.expected_date)
             out.append({"tranid": po.tranid, "trandate": po.trandate, "status": po.status,
                         "sku": imap.get(l.ns_item_id, l.ns_item_id),
+                        "name": names.get(l.ns_item_id, ""),
                         "ordered": float(l.qty_ordered or 0),
                         "received": float(l.qty_received or 0),
                         "outstanding": outstanding, "expected": expected,

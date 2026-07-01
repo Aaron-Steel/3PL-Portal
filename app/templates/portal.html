@@ -128,13 +128,13 @@
       <div class="card"><header><h3>Open purchase orders</h3><span class="hint">keyed at $0 — customer retains ownership</span></header>
         {{ tabletools('tbl-soo', customer.slug ~ '-stock-on-order') }}
         <div class="tablewrap"><table id="tbl-soo">
-          <thead><tr><th>PO</th><th>Item</th><th>Inbound shipment</th><th class="r">Ordered</th><th class="r">Received</th><th class="r">Outstanding</th><th>Expected receipt</th><th>Status</th></tr></thead>
-          <tbody>{% for r in rows %}<tr><td><span class="id">{{ r.tranid }}</span></td><td class="prim">{{ r.sku }}</td>
+          <thead><tr><th>PO</th><th>SKU</th><th>Description</th><th>Inbound shipment</th><th class="r">Ordered</th><th class="r">Received</th><th class="r">Outstanding</th><th>Expected receipt</th><th>Status</th></tr></thead>
+          <tbody>{% for r in rows %}<tr><td><span class="id">{{ r.tranid }}</span></td><td><span class="id">{{ r.sku }}</span></td><td class="prim">{{ r.name }}</td>
             <td>{% if r.shipment %}<span class="id">{{ r.shipment }}</span>{% if r.shipment_status %} <span class="chip {{ r.shipment_status|chip }}">{{ r.shipment_status }}</span>{% endif %}{% else %}<span class="muted2">—</span>{% endif %}</td>
             <td class="r num">{{ r.ordered|qty }}</td><td class="r num">{{ r.received|qty }}</td><td class="r num">{{ r.outstanding|qty }}</td>
             <td>{{ r.expected|dshort }}</td><td><span class="chip {{ r.status|chip }}">{{ r.status }}</span></td></tr>
-          {% else %}<tr><td class="empty" colspan="8">No open purchase orders.</td></tr>{% endfor %}</tbody>
-          {% if rows %}<tfoot><tr><td colspan="5">{{ rows|map(attribute='tranid')|unique|list|length }} open</td><td class="r">{{ tot_out|qty }}</td><td colspan="2"></td></tr></tfoot>{% endif %}
+          {% else %}<tr><td class="empty" colspan="9">No open purchase orders.</td></tr>{% endfor %}</tbody>
+          {% if rows %}<tfoot><tr><td colspan="6">{{ rows|map(attribute='tranid')|unique|list|length }} open</td><td class="r">{{ tot_out|qty }}</td><td colspan="2"></td></tr></tfoot>{% endif %}
         </table></div>
       </div>
 
