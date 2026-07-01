@@ -100,6 +100,7 @@ const cfg = await helpers.httpRequest({
 const CUSTOMERS = cfg.customers || [];
 
 // 1) READS: pull each entity per customer and push to /admin/ingest
+const readFailures = [];   // {customer, entity} for each read that errored this run
 for (const c of CUSTOMERS) {
   for (const entity of READ_ENTITIES) {
     try {
@@ -111,8 +112,24 @@ for (const c of CUSTOMERS) {
         body: { customer: c.slug, entity, rows }, json: true });
       out.push({ json: r });
     } catch (e) {
-      out.push({ json: { step: 'read', customer: c.slug, entity, error: String(e.message || e) } });
+      readFailures.push({ customer: c.slug, entity });
+      out.push({ json: { step: 'read', level: 'error', customer: c.slug, entity, error: String(e.message || e) } });
     }
+  }
+}
+
+// The Stock-on-order shipment number + expected-receipt date are stamped onto PO lines by the
+// inbound_shipments read. If purchase_orders synced but inbound_shipments failed for a customer,
+// those columns won't refresh this run (the app now carries forward the last stamped values so
+// they don't blank out — but a persistent failure means they go stale). Surface it loudly so it
+// doesn't stay invisible: this summary item is easy to alert on downstream (level:'warn').
+for (const c of CUSTOMERS) {
+  const poFailed = readFailures.some((f) => f.customer === c.slug && f.entity === 'purchase_orders');
+  const shipFailed = readFailures.some((f) => f.customer === c.slug && f.entity === 'inbound_shipments');
+  if (shipFailed && !poFailed) {
+    out.push({ json: { step: 'summary', level: 'warn', customer: c.slug,
+      warning: 'inbound_shipments read failed while purchase_orders succeeded — Stock-on-order '
+             + 'shipment/expected-receipt columns will not refresh until the next successful run.' } });
   }
 }
 

@@ -111,14 +111,24 @@ def ingest_purchase_orders(db: Session, c: Customer, rows: list[dict]) -> int:
                      customer_id=c.id, tranid=r.get("tranid"),
                      trandate=_date(r.get("trandate")), status=r.get("status"))
         db.flush()
+        # PRESERVE THE SHIPMENT LINK across this delete+recreate. The PO pull carries neither
+        # ns_inbound_shipment nor expected_date — those are stamped onto the line by the LATER
+        # inbound_shipments ingest. A naive rebuild blanks both every run, so if that pass
+        # errors/times out (it's the heaviest read) the Stock-on-order shipment + expected-receipt
+        # columns vanish until the next good full run. Snapshot the stamped values (keyed by item,
+        # which is effectively unique per PO — see the match in ingest_inbound_shipments) and carry
+        # them forward whenever the incoming pull doesn't supply them.
+        prior = {l.ns_item_id: (l.ns_inbound_shipment, l.expected_date) for l in po.lines}
         for l in list(po.lines):
             db.delete(l)
         for ln in r.get("lines", []):
-            db.add(PoLine(purchase_order_id=po.id, ns_item_id=str(ln["ns_item_id"]),
+            ns_item = str(ln["ns_item_id"])
+            kept_ship, kept_expected = prior.get(ns_item, (None, None))
+            db.add(PoLine(purchase_order_id=po.id, ns_item_id=ns_item,
                           qty_ordered=_num(ln.get("qty_ordered")),
                           qty_received=_num(ln.get("qty_received")),
-                          expected_date=_date(ln.get("expected_date")),
-                          ns_inbound_shipment=ln.get("ns_inbound_shipment")))
+                          expected_date=_date(ln.get("expected_date")) or kept_expected,
+                          ns_inbound_shipment=ln.get("ns_inbound_shipment") or kept_ship))
     # Drop POs that are no longer open (fully received/closed → absent from the pull).
     for po in db.scalars(select(PurchaseOrder).where(
             PurchaseOrder.customer_id == c.id)).all():
