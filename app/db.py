@@ -47,7 +47,11 @@ def ensure_columns():
                  "item_receipt": {"po_tranid": "VARCHAR"},
                  "po_line": {"ns_inbound_shipment": "VARCHAR"},
                  "inbound_shipment": {"expected_date": "DATE"},
-                 "app_user": {"reset_token_hash": "VARCHAR", "reset_expires_at": "TIMESTAMP"}}
+                 "app_user": {"reset_token_hash": "VARCHAR", "reset_expires_at": "TIMESTAMP"},
+                 # location_scoped: added when the regular-brand model landed (2026-07-22). Existing
+                 # rows get NULL (read as False); the sync coerces bool(). BOOLEAN is portable to both
+                 # SQLite (INTEGER affinity) and Postgres; no DEFAULT so Postgres doesn't reject `0`.
+                 "customer": {"location_scoped": "BOOLEAN"}}
     insp = inspect(engine)
     with engine.begin() as conn:
         for table, cols in additions.items():

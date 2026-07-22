@@ -57,5 +57,5 @@ A period already queued/pushed/invoiced is locked against re-billing.
      defaults to full, so any pre-existing single-schedule wiring keeps working unchanged.
 
 ## Validated NetSuite ids (from `netsuite_validation.md`)
-Mova: location `49`, class `253`. Skriva: customer `10496`, vendor `10503`, location `2`, class `236`.
+Mova: location `49`, class `237` (regular MOVA brand — dedicated `253` dropped 2026-07-22). Skriva: customer `10496`, vendor `10503`, location `2`, class `236`.
 `inbound_shipments` read action is TODO — confirm `inboundshipment` field names against real Mova data.

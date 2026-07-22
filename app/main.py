@@ -562,6 +562,7 @@ async def admin_customer_create(request: Request, db: Session = Depends(get_db))
     slug = (form.get("slug", "") or "").strip().lower()
     name = (form.get("name", "") or "").strip()
     ns_customer_id = (form.get("ns_customer_id", "") or "").strip()
+    location_scoped = form.get("location_scoped") is not None  # checkbox: present only when ticked
 
     error = ""
     if not slug or not all(ch.isalnum() or ch == "-" for ch in slug):
@@ -580,6 +581,7 @@ async def admin_customer_create(request: Request, db: Session = Depends(get_db))
                      ns_class_id=form.get("ns_class_id", "").strip() or None,
                      ns_subsidiary_id=form.get("ns_subsidiary_id", "").strip() or None,
                      brand_label=form.get("brand_label", "").strip() or None,
+                     location_scoped=location_scoped,
                      location_label=form.get("location_label", "").strip() or None)
         charges = [{**ch, "rate": _safe_rate(form.get(f"rate_{ch['charge_type']}"))}
                    for ch in _blank_charges()]
@@ -593,6 +595,7 @@ async def admin_customer_create(request: Request, db: Session = Depends(get_db))
                  ns_class_id=form.get("ns_class_id", "").strip() or None,
                  ns_subsidiary_id=form.get("ns_subsidiary_id", "").strip() or None,
                  brand_label=form.get("brand_label", "").strip() or None,
+                 location_scoped=location_scoped,
                  location_label=form.get("location_label", "").strip() or None)
     db.add(c)
     db.flush()
@@ -641,6 +644,7 @@ async def admin_customer_save(cust_id: int, request: Request, db: Session = Depe
     c.ns_location_id = form.get("ns_location_id", "").strip() or None
     c.ns_class_id = form.get("ns_class_id", "").strip() or None
     c.ns_subsidiary_id = form.get("ns_subsidiary_id", "").strip() or None
+    c.location_scoped = form.get("location_scoped") is not None  # checkbox: present only when ticked
 
     # Rate-card edit: if any rate changed, create a NEW effective-dated card (today)
     # and close the previous one — so historical billing runs still reprice correctly.
@@ -697,7 +701,7 @@ def admin_sync_config(request: Request, db: Session = Depends(get_db)):
     return JSONResponse({"customers": [
         {"slug": c.slug, "ns_customer_id": c.ns_customer_id, "ns_supplier_id": c.ns_supplier_id,
          "ns_location_id": c.ns_location_id, "ns_class_id": c.ns_class_id,
-         "ns_subsidiary_id": c.ns_subsidiary_id}
+         "ns_subsidiary_id": c.ns_subsidiary_id, "location_scoped": bool(c.location_scoped)}
         for c in custs if c.ns_class_id]})
 
 

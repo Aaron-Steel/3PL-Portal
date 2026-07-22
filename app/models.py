@@ -28,8 +28,13 @@ class Customer(Base):
     ns_location_id: Mapped[str | None] = mapped_column(String, nullable=True)  # 3PL location
     ns_class_id: Mapped[str | None] = mapped_column(String, nullable=True)     # "brand" classification
     ns_subsidiary_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    brand_label: Mapped[str | None] = mapped_column(String, nullable=True)     # display, e.g. 'Mova 3PL'
+    brand_label: Mapped[str | None] = mapped_column(String, nullable=True)     # display, e.g. 'MOVA'
     location_label: Mapped[str | None] = mapped_column(String, nullable=True)  # display, e.g. '3PL Warehouse · Melbourne'
+    # True: 3PL stock lives in a dedicated location (ns_location_id) so NetSuite reads filter by
+    # class AND location (e.g. Mova — its regular MOVA brand also covers Macgear-owned stock, so
+    # brand alone would leak non-3PL activity). False: brand class is 3PL-exclusive and stock may
+    # span locations, so scope by class only (e.g. Skriva — Auckland + Christchurch). See db.py.
+    location_scoped: Mapped[bool] = mapped_column(Boolean, default=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

@@ -40,6 +40,19 @@ define(['N/query', 'N/record'], function (query, record) {
     return order.map(function (id) { return byId[id]; });
   }
 
+  function truthy(v) { return v === true || v === 'true' || v === 1 || v === '1'; }
+
+  // Per-customer stock isolation. Every read is scoped by the item's brand class. When the customer
+  // is `location_scoped` (its brand also covers non-3PL / Macgear-owned stock, e.g. Mova on its
+  // regular MOVA brand), we additionally filter by the dedicated 3PL location so only 3PL activity
+  // comes through. When it's not location_scoped (brand is 3PL-exclusive and stock may span
+  // locations, e.g. Skriva across Auckland + Christchurch), class alone is the correct isolation
+  // and we must NOT filter by location. `alias` = the transactionline/inventorybalance table alias.
+  function locClause(p, alias) {
+    return (truthy(p.location_scoped) && p.ns_location_id)
+      ? " AND " + alias + ".location=" + Number(p.ns_location_id) : "";
+  }
+
   // ---- READ actions (params are NetSuite internal ids from the app's customer record) ----
   function invoices(p) {
     var heads = runSuiteQL(
@@ -62,14 +75,15 @@ define(['N/query', 'N/record'], function (query, record) {
   }
 
   function purchaseOrders(p) {
-    // Scope by vendor + the item's brand class (not line location — 3PL stock lives in sub-
-    // locations whose id the transaction line doesn't carry the way inventorybalance does).
+    // Scope by vendor + the item's brand class, plus the 3PL location for location_scoped customers
+    // (the PO line DOES carry the receiving location — verified 2026-07-22 — so a Mova-brand PO
+    // receiving into a regular warehouse is correctly excluded from the 3PL portal).
     var flat = runSuiteQL(
       "SELECT t.id, t.tranid, t.trandate, BUILTIN.DF(t.status) status, tl.item, " +
       "tl.quantity ordered, tl.quantityshiprecv received FROM transaction t " +
       "JOIN transactionline tl ON tl.transaction=t.id JOIN item i ON i.id=tl.item " +
       "WHERE t.type='PurchOrd' AND t.entity=" + Number(p.ns_supplier_id) +
-      " AND i.class=" + Number(p.ns_class_id) +
+      " AND i.class=" + Number(p.ns_class_id) + locClause(p, 'tl') +
       " AND tl.mainline='F' AND tl.taxline='F' AND tl.quantityshiprecv < tl.quantity");
     return group(flat, 'id',
       function (r) { return { ns_po_id: String(r.id), tranid: r.tranid, trandate: r.trandate, status: r.status }; },
@@ -78,7 +92,9 @@ define(['N/query', 'N/record'], function (query, record) {
 
   function itemReceipts(p) {
     // Scope by the ITEM's brand class (reliably set on the item; a manually-keyed receipt line
-    // often has no class) so shared locations don't leak other customers' receipts.
+    // often has no class) so shared locations don't leak other customers' receipts, PLUS the 3PL
+    // location for location_scoped customers — otherwise Mova's regular MOVA brand pulls in every
+    // owned-inventory receipt into regular warehouses, not just 3PL putaways (fixed 2026-07-22).
     // po_tranid: the source PO's document number. createdfrom is not selectable in SuiteQL, so
     // walk previoustransactionlinelink (receipt = nextdoc) back to a PurchOrd. Null when the
     // receipt came from something else (e.g. a transfer order), so only true PO receipts show one.
@@ -89,7 +105,7 @@ define(['N/query', 'N/record'], function (query, record) {
       "WHERE ptll.nextdoc=t.id AND po.type='PurchOrd') po_tranid, " +
       "tl.item, tl.quantity FROM transaction t " +
       "JOIN transactionline tl ON tl.transaction=t.id JOIN item i ON i.id=tl.item " +
-      "WHERE t.type='ItemRcpt' AND i.class=" + Number(p.ns_class_id) +
+      "WHERE t.type='ItemRcpt' AND i.class=" + Number(p.ns_class_id) + locClause(p, 'tl') +
       " AND tl.mainline='F' AND tl.taxline='F' AND t.trandate >= " + sinceExpr(p.since));
     return group(flat, 'id',
       function (r) { return { ns_receipt_id: String(r.id), tranid: r.tranid, trandate: r.trandate,
@@ -110,7 +126,7 @@ define(['N/query', 'N/record'], function (query, record) {
       "JOIN transactionline tl ON tl.transaction=t.id JOIN item i ON i.id=tl.item " +
       "WHERE t.type='ItemShip' AND t.entity IN (" +
       Number(p.ns_customer_id) + "," + Number(p.ns_supplier_id) + ") AND i.class=" +
-      Number(p.ns_class_id) + " AND tl.mainline='F' AND tl.taxline='F' " +
+      Number(p.ns_class_id) + locClause(p, 'tl') + " AND tl.mainline='F' AND tl.taxline='F' " +
       "AND tl.accountinglinetype='ASSET' AND tl.quantity IS NOT NULL AND tl.quantity <> 0 " +
       "AND t.trandate >= " + sinceExpr(p.since));
     var custId = String(p.ns_customer_id);
@@ -121,13 +137,14 @@ define(['N/query', 'N/record'], function (query, record) {
   }
 
   function stockOnHand(p) {
-    // inventorybalance has multiple rows per item (status/bin); sum to one net qty/item. Filter by
-    // the item's brand class so a shared location (e.g. Skriva @ Auckland) returns only this
-    // customer's stock, not the whole warehouse.
+    // inventorybalance has multiple rows per item (status/bin); sum to one net qty/item. Scope by
+    // the item's brand class, plus the 3PL location for location_scoped customers (Mova — so owned
+    // MOVA stock in other warehouses is excluded). A non-location_scoped customer (Skriva) sums its
+    // brand across all its locations, since the brand is 3PL-exclusive.
     var flat = runSuiteQL(
       "SELECT ib.item, SUM(ib.quantityonhand) qty FROM inventorybalance ib " +
-      "JOIN item i ON i.id=ib.item WHERE ib.location=" + Number(p.ns_location_id) +
-      " AND i.class=" + Number(p.ns_class_id) + " GROUP BY ib.item");
+      "JOIN item i ON i.id=ib.item WHERE i.class=" + Number(p.ns_class_id) +
+      locClause(p, 'ib') + " GROUP BY ib.item");
     return flat.map(function (r) { return { ns_item_id: String(r.item), qty_on_hand: r.qty }; });
   }
 
@@ -157,7 +174,8 @@ define(['N/query', 'N/record'], function (query, record) {
     //    and shipmentstatus (already a TEXT label like 'received' — do NOT wrap in BUILTIN.DF).
     //  - inboundshipmentitem has NO `item` column: the PO line (and thus the item) is reached via
     //    shipmentitemtransaction = transactionline.uniquekey; the PO header via purchaseordertransaction.
-    //  - scope by the item's brand class (i.class) — same per-customer isolation as the other reads.
+    //  - scope by the item's brand class (i.class), plus the 3PL location (via the PO line) for
+    //    location_scoped customers — same per-customer isolation as the other reads.
     var cls = Number(p.ns_class_id);
     // Member lines: shipment id + PO doc number + item, for the Stock-on-order PO->shipment link.
     var members = runSuiteQL(
@@ -166,7 +184,7 @@ define(['N/query', 'N/record'], function (query, record) {
       "JOIN transactionline tl ON tl.uniquekey = isi.shipmentitemtransaction " +
       "JOIN item i ON i.id = tl.item " +
       "LEFT JOIN transaction po ON po.id = isi.purchaseordertransaction " +
-      "WHERE i.class = " + cls);
+      "WHERE i.class = " + cls + locClause(p, 'tl'));
     var membersByShip = {}, ids = {};
     members.forEach(function (m) {
       var k = String(m.shipment); ids[k] = true;

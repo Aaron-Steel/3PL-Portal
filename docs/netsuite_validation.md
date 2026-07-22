@@ -23,13 +23,16 @@ until Mova items/transactions exist (~end Jul 2026).
 | Location — NZ2 Auckland | `2` | Skriva's location (no dedicated 3PL loc) |
 | Location — ClassVR 3PL | `22`, `29` | **another existing 3PL customer** — confirms multi-tenant |
 | Class/brand — SKRIVA STYLUS | `236` | Skriva's brand tag |
-| **Class/brand — 3PL - Mova** | **`253`** | Mova's brand tag (also `231` "3PL", `237` "MOVA") |
+| **Class/brand — MOVA** | **`237`** | Mova's brand tag — the **regular MOVA brand** (305 items). Dedicated `3PL - Mova` (`253`) is dropped as of 2026-07-22 (held only a test item). |
 | Skriva customer | `10496` | entityid `03191` "Skriva Stylus" |
 | Skriva vendor | `10503` | entityid `V01157` |
 | Skriva item (white) | `50101` | `S-STYCASE-WHITE`; (blue = `38693`) |
 
 > **Brand is the NetSuite `classification`, not a free-text field.** Store the class **id** per customer,
-> not a string. The stock-isolation filter per customer = `location = X AND class = Y`.
+> not a string. The stock-isolation filter is **per-customer** (`customer.location_scoped`): scope by
+> `class = Y` always, **AND** `location = X` only when the brand class also covers non-3PL stock
+> (Mova: class `237` + loc `49`). Brand-exclusive customers whose stock spans locations (Skriva:
+> Auckland + Christchurch) scope by class alone — a location filter would drop their rows.
 
 ## Item record fields (from `SELECT * FROM item WHERE id=50101`)
 - `class` = brand (236). `subsidiary`, `totalquantityonhand` present on the item.
@@ -141,6 +144,8 @@ is later edited, and a partiallyReceived→received transition re-dates it — r
 1. Confirm Mova item `custitem_pallet_quantity` is the units/pallet field and is populated.
 2. ~~`inboundshipment` field names~~ **DONE (2026-06-30)** — validated against production; RESTlet
    `inbound_shipments` query corrected. Still worth a final smoke-test against the first real **Mova**
-   shipment once one exists (class 253), as the queries were proven on the NANOLEAF brand.
+   shipment once one exists (class `237` MOVA), as the queries were proven on the NANOLEAF brand.
 3. First real VRMA fulfilment to confirm the entity-based SO/VRMA discriminator on Mova.
-4. Confirm Mova's exact class id on items is `253` (vs `237`/`231`).
+4. ~~Confirm Mova's exact class id~~ **RESOLVED (2026-07-22):** Mova uses its **regular MOVA brand `237`**
+   (305 items, regular SKUs). The dedicated `3PL - Mova` `253` brand and dedicated 3PL SKUs are dropped —
+   3PL stock is isolated by `location = 49 AND class = 237`, the same shape as Skriva.

@@ -21,8 +21,8 @@
 | | **Mova** (target) | **Skriva** (reference, live now) |
 |---|---|---|
 | Stock location | dedicated `3PL Warehouse` (Melbourne) | main `Auckland` warehouse |
-| Brand tag | `Mova 3PL` | (TBD — confirm in NetSuite) |
-| Item example | (TBD) | `S-STYCASE-WHITE` |
+| Brand tag | `MOVA` (class `237`, the regular brand — no dedicated 3PL brand) | `SKRIVA STYLUS` (class `236`) |
+| Item example | regular SKUs, e.g. `010201AA000437` | `S-STYCASE-WHITE` |
 | Separate 3PL location? | **yes** | **no** ($0 on main warehouse) |
 
 The cache must isolate a customer's stock by **(location AND/OR brand)**, because Skriva proves you can't

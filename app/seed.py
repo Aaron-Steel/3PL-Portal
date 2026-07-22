@@ -45,10 +45,10 @@ def _rate_card(db, customer, rates, effective_from=date(2026, 1, 1)):
 def _seed_mova_demo(db, mova):
     """A month of plausible cached activity so every view renders with real-looking numbers."""
     items = [
-        Item(customer_id=mova.id, ns_item_id="90001", sku="MOVA-V30-ULTRA",
-             description="Mova V30 Ultra robot vacuum", units_per_pallet=48),
-        Item(customer_id=mova.id, ns_item_id="90002", sku="MOVA-P10-PRO",
-             description="Mova P10 Pro robot vacuum", units_per_pallet=60),
+        Item(customer_id=mova.id, ns_item_id="90001", sku="010201AA000437",
+             description="MOVA Z50 Ultra Wet and Dry Robotic Vacuum", units_per_pallet=48),
+        Item(customer_id=mova.id, ns_item_id="90002", sku="010901AA000024",
+             description="MOVA Robotic Lawn Mower 1000", units_per_pallet=60),
     ]
     db.add_all(items)
 
@@ -177,13 +177,17 @@ def seed():
             print("Customers already present — skipping customer/demo seed.")
             seed_users(db)
             return
+        # Mova: regular MOVA brand (237) also covers Macgear-owned stock, so isolate 3PL activity by
+        # the dedicated 3PL Warehouse location (49) too → location_scoped=True.
         mova = Customer(slug="mova", name="Mova", ns_customer_id="TBD",
-                        ns_supplier_id="TBD", ns_location_id="49", ns_class_id="253",
-                        ns_subsidiary_id="2", brand_label="Mova 3PL",
+                        ns_supplier_id="TBD", ns_location_id="49", ns_class_id="237",
+                        ns_subsidiary_id="2", brand_label="MOVA", location_scoped=True,
                         location_label="3PL Warehouse · Melbourne")
+        # Skriva: SKRIVA STYLUS brand (236) is 3PL-exclusive and its stock spans NZ locations
+        # (Auckland + Christchurch), so scope by brand class only → location_scoped=False.
         skriva = Customer(slug="skriva", name="Skriva Stylus", ns_customer_id="10496",
                           ns_supplier_id="10503", ns_location_id="2", ns_class_id="236",
-                          ns_subsidiary_id="3", brand_label="Skriva Stylus",
+                          ns_subsidiary_id="3", brand_label="Skriva Stylus", location_scoped=False,
                           location_label="Auckland warehouse (no separate 3PL location)")
         db.add_all([mova, skriva])
         db.flush()

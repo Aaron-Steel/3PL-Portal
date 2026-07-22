@@ -39,8 +39,21 @@ Seeded logins (dev — CHANGE): admin@macgeargroup.com/admin123,
 ops@macgeargroup.com/internal123, viewer@mova.com/mova123. Auth is always on now (no shared-password mode).
 
 ## Validated NetSuite facts (2026-06-26)
-Brand = NetSuite **classification** (store class id, not text). Mova class `253` (3PL - Mova) @ location
-`49` (warehouse 3PL); Skriva class `236` @ location `2` (Auckland). Skriva customer `10496`, vendor
+Brand = NetSuite **classification** (store class id, not text). Mova uses its **regular MOVA brand** —
+class `237` (MOVA) @ location `49` (warehouse 3PL); Skriva class `236` @ location `2` (Auckland).
+**Model change (2026-07-22):** dropped the dedicated `3PL - Mova` brand (`253`) and dedicated 3PL SKUs —
+Mova stock is tagged with its normal MOVA brand (`237`) + regular SKUs, same as Skriva.
+**Stock isolation is now per-customer, via `customer.location_scoped`:**
+- `location_scoped=True` (Mova): the brand class *also* covers Macgear-owned stock, so every NetSuite
+  read filters by **class AND the dedicated 3PL location** (`237` + loc `49`). Without the location
+  filter, all MOVA-branded receipts/fulfilments/POs across every warehouse leak into the portal
+  (and would massively over-bill putaway). This is the bug we hit right after the 253→237 switch.
+- `location_scoped=False` (Skriva): the brand class is 3PL-exclusive and stock spans locations
+  (Auckland + Christchurch), so reads scope by **class only** — a location filter would drop rows.
+The RESTlet's `locClause(p, alias)` applies the location filter iff `location_scoped`; the flag rides
+in the customer record via `/admin/sync-config` (n8n spreads it into RESTlet params — **no n8n edit**).
+**Deploy:** (1) in `/admin/customers` set Mova's Brand class id `237`, Brand label `MOVA`, and **tick
+"Isolate 3PL stock to the location above"**; (2) redeploy `netsuite/3pl_restlet.js` in NetSuite. Skriva customer `10496`, vendor
 `10503`, item `S-STYCASE-WHITE`=`50101`. Picking source SO-vs-VRMA = fulfilment `entity` (customer vs
 vendor); `createdfrom` is NOT selectable in SuiteQL. Open-PO test = `quantityshiprecv < quantity`.
 Fulfilments: count units off the **ASSET line, ABS(qty)** (SO emits +COGS/−ASSET pair, VRMA emits a lone −ASSET line; old "sum positives" dropped every VRMA — corrected 2026-06-27). Skriva invoices are $0 product invoices, so the
@@ -49,12 +62,12 @@ Fulfilments: count units off the **ASSET line, ABS(qty)** (SO emits +COGS/−ASS
 
 ## The business model
 - Macgear does **not** buy or own the stock — it transacts it and charges a fee for receiving, storing, dispatching.
-- Stock for the flagship customer (Mova) lives in a dedicated **3PL Warehouse** location (Melbourne); brand tagged **`Mova 3PL`**.
-- NetSuite setup: new `3PL warehouse` location; customer record (for invoicing + $0 dispatch sales orders); supplier record (for $0 POs to receive stock); items branded `Mova 3PL` with units-per-pallet populated.
+- Stock for the flagship customer (Mova) lives in a dedicated **3PL Warehouse** location (Melbourne); items keep their **regular `MOVA` brand** (class `237`) and **regular SKUs** — no dedicated 3PL brand/SKU.
+- NetSuite setup: new `3PL warehouse` location; customer record (for invoicing + $0 dispatch sales orders); supplier record (for $0 POs to receive stock); items are the normal MOVA-branded items with units-per-pallet populated. What makes stock "3PL" is the **location** (49), not a special brand.
 
 ## Processes (mirror these in any data model)
 - **Receiving:** $0 PO on supplier account against 3PL location → inbound shipment per container → receipt on arrival.
-- **Storage:** stock on hand in 3PL location, brand `Mova 3PL`. Charged per pallet per week. Pallets = `units on hand ÷ units per pallet`.
+- **Storage:** stock on hand in 3PL location, brand `MOVA`. Charged per pallet per week. Pallets = `units on hand ÷ units per pallet`.
 - **Dispatching:** two paths — see **Dispatch procedure** below for which to use.
 - **Billing (weekly, against customer record):** the 5 charge sources below.
 
@@ -69,7 +82,7 @@ Fulfilments: count units off the **ASSET line, ABS(qty)** (SO emits +COGS/−ASS
 | Charge | Rate | Basis |
 |---|---|---|
 | Container unload — 40ft loose stacked | $1,500 | per container (inbound shipments received) |
-| Putaway | $1.00 | per unit (item receipts vs 3PL loc, brand Mova 3PL) |
+| Putaway | $1.00 | per unit (item receipts vs 3PL loc, brand MOVA) |
 | Storage | $4.50 | per pallet / week (units on hand ÷ units/pallet) |
 | Picking | $1.00 | per unit (item fulfilments — SO **and** VRMA) |
 | Shipping | — | per agreed shipping rate card |

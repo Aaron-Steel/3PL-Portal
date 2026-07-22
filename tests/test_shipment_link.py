@@ -44,7 +44,7 @@ def _fresh_customer():
     Base.metadata.create_all(engine)
     db = SessionLocal()
     cust = Customer(slug="mova", name="Mova", ns_customer_id="10000",
-                    ns_supplier_id="10001", ns_location_id="49", ns_class_id="253")
+                    ns_supplier_id="10001", ns_location_id="49", ns_class_id="237")
     db.add(cust)
     db.commit()
     return db, cust
