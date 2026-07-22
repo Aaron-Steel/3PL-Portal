@@ -7,7 +7,7 @@ views; the billing run and admin console are Macgear-internal. The /admin/ingest
 """
 import json
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -20,7 +20,8 @@ from . import netsuite, perms, service
 from .billing import compute_billing, result_to_run_kwargs
 from .db import Base, SessionLocal, engine, get_db
 from .models import (BillingLine, BillingRun, Customer, Invoice, RateCard, RateCardLine, User)
-from .security import hash_password, sign, unsign, verify_password
+from .notify import send_reset_email
+from .security import hash_password, hash_token, make_reset_token, sign, unsign, verify_password
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 Base.metadata.create_all(engine)
@@ -34,7 +35,8 @@ def _ensure_columns():
     additions = {"stock_on_hand": {"synced_at": "TIMESTAMP"},
                  "item_receipt": {"po_tranid": "VARCHAR"},
                  "po_line": {"ns_inbound_shipment": "VARCHAR"},
-                 "inbound_shipment": {"expected_date": "DATE"}}
+                 "inbound_shipment": {"expected_date": "DATE"},
+                 "app_user": {"reset_token_hash": "VARCHAR", "reset_expires_at": "TIMESTAMP"}}
     insp = inspect(engine)
     with engine.begin() as conn:
         for table, cols in additions.items():
@@ -128,8 +130,12 @@ DEFAULT_CHARGES = [
 APP_SECRET = os.environ.get("APP_SECRET", "") or "dev-insecure-secret-change-me"
 SYNC_TOKEN = os.environ.get("SYNC_TOKEN", "")
 COOKIE_NAME = "threepl_session"
-# token-authed server-to-server endpoints (n8n) bypass the login cookie
-_EXEMPT_EXACT = {"/login", "/logout", "/admin/ingest", "/admin/sync-config",
+# Absolute base for links we email out (behind the Caddy proxy request.base_url is unreliable).
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+RESET_TOKEN_TTL_MIN = int(os.environ.get("RESET_TOKEN_TTL_MIN", "45"))
+# token-authed server-to-server endpoints (n8n) + public reset flow bypass the login cookie
+_EXEMPT_EXACT = {"/login", "/logout", "/forgot", "/reset",
+                 "/admin/ingest", "/admin/sync-config",
                  "/admin/billing/pending", "/admin/billing/pushed"}
 
 
@@ -164,7 +170,9 @@ async def require_login(request: Request, call_next):
 def login_form(request: Request):
     if unsign(request.cookies.get(COOKIE_NAME, ""), APP_SECRET):
         return RedirectResponse("/", status_code=303)
-    return templates.TemplateResponse(request, "login.html", {"error": ""})
+    notice = ("Your password has been set — please sign in."
+              if request.query_params.get("msg") == "reset" else "")
+    return templates.TemplateResponse(request, "login.html", {"error": "", "notice": notice})
 
 
 @app.post("/login")
@@ -190,6 +198,77 @@ def logout():
     resp = RedirectResponse("/login", status_code=303)
     resp.delete_cookie(COOKIE_NAME)
     return resp
+
+
+# --- password reset / set-password (public, single-use token) ----------------
+def _issue_reset_link(db: Session, user: User, request: Request) -> str:
+    """Mint a single-use token, persist only its hash + expiry, attempt to email the link,
+    and return the link so the admin UI can show it for manual copy (email delivery is
+    best-effort / optional — see app/notify.py)."""
+    raw = make_reset_token()
+    user.reset_token_hash = hash_token(raw)
+    user.reset_expires_at = datetime.utcnow() + timedelta(minutes=RESET_TOKEN_TTL_MIN)
+    db.commit()
+    base = PUBLIC_BASE_URL or str(request.base_url).rstrip("/")
+    link = f"{base}/reset?token={raw}"
+    send_reset_email(user.email, link)
+    return link
+
+
+def _user_for_reset_token(db: Session, token: str) -> User | None:
+    if not token:
+        return None
+    user = db.scalar(select(User).where(User.reset_token_hash == hash_token(token)))
+    if not user or not user.reset_expires_at or user.reset_expires_at < datetime.utcnow():
+        return None
+    return user
+
+
+@app.get("/forgot", response_class=HTMLResponse)
+def forgot_form(request: Request):
+    return templates.TemplateResponse(request, "forgot_password.html", {"sent": False})
+
+
+@app.post("/forgot", response_class=HTMLResponse)
+async def forgot_submit(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    email = (form.get("email", "") or "").strip().lower()
+    user = db.scalar(select(User).where(User.email == email))
+    if user and user.active:
+        _issue_reset_link(db, user, request)
+    # Identical response whether or not the address matched — no account enumeration.
+    return templates.TemplateResponse(request, "forgot_password.html", {"sent": True})
+
+
+@app.get("/reset", response_class=HTMLResponse)
+def reset_form(request: Request, token: str = "", db: Session = Depends(get_db)):
+    user = _user_for_reset_token(db, token)
+    return templates.TemplateResponse(request, "reset_password.html",
+                                      {"invalid": user is None,
+                                       "token": token if user else "", "error": ""})
+
+
+@app.post("/reset")
+async def reset_submit(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    token = form.get("token", "")
+    pw = form.get("password", "")
+    pw2 = form.get("password2", "")
+    user = _user_for_reset_token(db, token)
+    if not user:
+        return templates.TemplateResponse(request, "reset_password.html",
+                                          {"invalid": True, "token": "", "error": ""})
+    if len(pw) < 10 or pw != pw2:
+        return templates.TemplateResponse(
+            request, "reset_password.html",
+            {"invalid": False, "token": token,
+             "error": "Passwords must match and be at least 10 characters."},
+            status_code=400)
+    user.password_hash = hash_password(pw)
+    user.reset_token_hash = None
+    user.reset_expires_at = None
+    db.commit()
+    return RedirectResponse("/login?msg=reset", status_code=303)
 
 
 # --- helpers -----------------------------------------------------------------
@@ -380,17 +459,23 @@ def admin_users(request: Request, db: Session = Depends(get_db)):
                                       {"rows": rows, "section": "users"})
 
 
+def _user_form_ctx(request: Request, db: Session, u: User | None,
+                   notice: str = "", reset_link: str = "") -> dict:
+    selected = perms.effective_views(u) if u else perms.role_default("customer")
+    return {"section": "users", "u": u, "customers": _customers(db),
+            "view_keys": perms.VIEW_KEYS, "selected": selected,
+            "role": u.role if u else "customer",
+            "notice": notice, "reset_link": reset_link}
+
+
 @app.get("/admin/users/{user_id}", response_class=HTMLResponse)
 @app.get("/admin/users/new", response_class=HTMLResponse)
 def admin_user_form(request: Request, user_id: int | None = None, db: Session = Depends(get_db)):
     if (r := _deny_non_admin(request)):
         return r
     u = db.get(User, user_id) if user_id else None
-    selected = perms.effective_views(u) if u else perms.role_default("customer")
-    return templates.TemplateResponse(request, "admin_user_form.html", {
-        "section": "users", "u": u, "customers": _customers(db),
-        "view_keys": perms.VIEW_KEYS, "selected": selected,
-        "role": u.role if u else "customer"})
+    return templates.TemplateResponse(request, "admin_user_form.html",
+                                      _user_form_ctx(request, db, u))
 
 
 @app.post("/admin/users/{user_id}")
@@ -409,25 +494,44 @@ async def admin_user_save(request: Request, user_id: int | None = None,
     selected = form.getlist("views")
     allowed = perms.normalize_allowed(role, selected)
     active = form.get("active") == "on"
-    pw = form.get("password", "")
 
     u = db.get(User, user_id) if user_id else None
+    invite = False
     if u is None:
-        if not email or not pw:
+        if not email:
             return RedirectResponse("/admin/users/new", status_code=303)
-        u = User(email=email, password_hash=hash_password(pw))
+        # New users have no password — they set their own via a set-password link.
+        u = User(email=email, password_hash="")
         db.add(u)
-    else:
-        if email:
-            u.email = email
-        if pw:
-            u.password_hash = hash_password(pw)
+        invite = True
+    elif email:
+        u.email = email
     u.role = role
     u.customer_id = cust_id
     u.allowed_views = allowed
     u.active = active
     db.commit()
+    if invite:
+        link = _issue_reset_link(db, u, request)   # the "set your password" link
+        return templates.TemplateResponse(request, "admin_user_form.html", _user_form_ctx(
+            request, db, u,
+            notice="User created. Send them the set-password link below (also emailed if email is configured).",
+            reset_link=link))
     return RedirectResponse("/admin/users", status_code=303)
+
+
+@app.post("/admin/users/{user_id}/send-reset")
+def admin_user_send_reset(user_id: int, request: Request, db: Session = Depends(get_db)):
+    if (r := _deny_non_admin(request)):
+        return r
+    u = db.get(User, user_id)
+    if not u:
+        return RedirectResponse("/admin/users", status_code=303)
+    link = _issue_reset_link(db, u, request)
+    return templates.TemplateResponse(request, "admin_user_form.html", _user_form_ctx(
+        request, db, u,
+        notice="Set-password link generated. Copy it below and send it to the user (also emailed if email is configured).",
+        reset_link=link))
 
 
 @app.post("/admin/users/{user_id}/delete")

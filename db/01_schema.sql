@@ -207,7 +207,9 @@ CREATE TABLE app_user (              -- "user" is reserved in Postgres
     allowed_views       TEXT,                           -- JSON list of view keys; NULL = role default
     active              BOOLEAN NOT NULL DEFAULT TRUE,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
-    last_login          TIMESTAMPTZ
+    last_login          TIMESTAMPTZ,
+    reset_token_hash    TEXT,                           -- SHA-256 of a single-use reset/set-password token
+    reset_expires_at    TIMESTAMPTZ                     -- NULL when no active token
 );
 
 CREATE TABLE sync_log (

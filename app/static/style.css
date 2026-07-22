@@ -51,6 +51,9 @@ input,select,textarea{background:var(--surface);color:var(--ink)}
 .login-card input{display:block;width:100%;margin-top:5px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:15px}
 .login-card button{width:100%;margin-top:8px;padding:10px;border:0;border-radius:8px;background:var(--brand);color:#fff;font-size:15px;cursor:pointer}
 .error{color:#c0392b;font-size:13px;margin:0 0 12px}
+.notice{color:var(--brand);font-size:13px;margin:0 0 12px}
+.login-alt{margin:14px 0 0;font-size:13px;text-align:center}
+.login-alt a{color:var(--muted)}
 
 /* shell */
 .app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
@@ -277,6 +280,9 @@ tfoot td{padding:12px 16px;font-weight:650;border-top:2px solid var(--line);back
 .chk input{width:16px;height:16px}
 .formact{display:flex;align-items:center;gap:12px;margin-top:8px}
 .formact .grow{flex:1}
+.resetlink{border-left:3px solid var(--brand)}
+.copyrow{display:flex;gap:8px;align-items:center;margin-top:6px}
+.copyrow input{flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font:13px monospace;background:var(--surface);color:var(--ink)}
 .btn.danger{background:var(--crit-tint);color:var(--crit);width:auto;margin-top:14px}
 .btn.danger:hover{background:#f3d7d2}
 .formcard .btn.primary{width:auto;padding:10px 20px}

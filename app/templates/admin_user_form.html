@@ -4,6 +4,18 @@
 <div class="a-head"><h1>{{ "Edit user" if u else "New user" }}</h1>
   <a class="link" href="/admin/users">← All users</a></div>
 
+{% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
+
+{% if reset_link %}
+<div class="card resetlink">
+  <p class="sub2">Single-use set-password link for <strong>{{ u.email }}</strong> — expires soon. Copy and send it to the user:</p>
+  <div class="copyrow">
+    <input id="resetlink" type="text" readonly value="{{ reset_link }}">
+    <button type="button" class="btn" onclick="navigator.clipboard.writeText(document.getElementById('resetlink').value);this.textContent='Copied'">Copy</button>
+  </div>
+</div>
+{% endif %}
+
 <form class="card formcard" method="post" action="{{ '/admin/users/' ~ u.id if u else '/admin/users/new' }}">
   <div class="frow">
     <label class="f">Email<input name="email" type="email" value="{{ u.email if u else '' }}" required></label>
@@ -20,9 +32,11 @@
         {% for c in customers %}<option value="{{ c.id }}" {{ 'selected' if u and u.customer_id == c.id }}>{{ c.name }}</option>{% endfor %}
       </select>
     </label>
-    <label class="f">Password {% if u %}<span class="sub2">(leave blank to keep)</span>{% endif %}
-      <input name="password" type="text" placeholder="{{ 'unchanged' if u else 'set initial password' }}" {{ 'required' if not u }}></label>
   </div>
+  <p class="sub2">{% if u %}Users set their own password. Use “Get set-password link” below
+    to generate a link for {{ u.email }} (shown here to copy; also emailed if email is configured).{% else %}
+    On create, a set-password link is generated for the user to set their own password —
+    no password is entered here.{% endif %}</p>
 
   <div class="perms">
     <div class="perms-h">Visible views <span class="sub2">— defaults by role; tick to override per user</span></div>
@@ -42,9 +56,15 @@
 </form>
 
 {% if u %}
-<form method="post" action="/admin/users/{{ u.id }}/delete" onsubmit="return confirm('Delete {{ u.email }}? This cannot be undone.')">
-  <button class="btn danger" type="submit">Delete user</button>
-</form>
+<div class="formact">
+  <form method="post" action="/admin/users/{{ u.id }}/send-reset">
+    <button class="btn" type="submit">Get set-password link</button>
+  </form>
+  <span class="grow"></span>
+  <form method="post" action="/admin/users/{{ u.id }}/delete" onsubmit="return confirm('Delete {{ u.email }}? This cannot be undone.')">
+    <button class="btn danger" type="submit">Delete user</button>
+  </form>
+</div>
 {% endif %}
 
 <script>

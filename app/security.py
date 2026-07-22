@@ -1,8 +1,9 @@
-"""Password hashing (PBKDF2, stdlib — no native deps) and signed-cookie helpers."""
+"""Password hashing (PBKDF2, stdlib — no native deps), signed-cookie and reset-token helpers."""
 import base64
 import hashlib
 import hmac
 import os
+import secrets
 
 _ITER = 200_000
 
@@ -35,3 +36,13 @@ def unsign(token: str, secret: str) -> str | None:
     value, _, sig = token.rpartition(".")
     expected = hmac.new(secret.encode(), value.encode(), hashlib.sha256).hexdigest()
     return value if hmac.compare_digest(sig, expected) else None
+
+
+def make_reset_token() -> str:
+    """A high-entropy, URL-safe token sent (raw) in the reset link email."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_token(raw: str) -> str:
+    """What we persist — we never store the raw token, only its SHA-256 digest."""
+    return hashlib.sha256(raw.encode()).hexdigest()

@@ -24,8 +24,17 @@ Per-user login (email + pbkdf2 password, signed-cookie session). Table `app_user
 (locked to one `customer_id`, visibility views only — no billing run). **Per-user view permissions:**
 default by role, overridable per user (`app_user.allowed_views` JSON; NULL = role default; see `perms.py`).
 **Admin console** (`/admin/users`, `/admin/customers`, admin-only): create/edit/deactivate users (assign
-role + customer + visible views + initial password), and edit per-customer rate cards — a rate change
+role + customer + visible views), and edit per-customer rate cards — a rate change
 writes a NEW effective-dated `RateCard` so past billing runs reprice correctly.
+**Password reset / set-password:** public **Forgot password** flow (`GET/POST /forgot`, `GET/POST /reset`)
+and an admin **"Get set-password link"** button — admins no longer type passwords. New users are created
+with an empty `password_hash` (login blocked) and given a link to set their own. Tokens are single-use:
+only `sha256(token)` + expiry are stored on `app_user` (`reset_token_hash`, `reset_expires_at`, ~45 min).
+On create / on button press the admin console **displays the link for the admin to copy** and send however
+they like (Teams, normal email) — no external dependency. Automatic email is optional/best-effort: if
+`N8N_RESET_WEBHOOK_URL` is set the link is also POSTed to an n8n webhook (`app/notify.py`) that mails it;
+unset = link only shown in the UI + logged to console. `/forgot` never reveals whether an address exists.
+(n8n email delivery was deferred — the copy-the-link UI is the working path; wire the webhook later if wanted.)
 Seeded logins (dev — CHANGE): admin@macgeargroup.com/admin123,
 ops@macgeargroup.com/internal123, viewer@mova.com/mova123. Auth is always on now (no shared-password mode).
 

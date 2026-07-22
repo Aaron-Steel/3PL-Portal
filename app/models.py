@@ -246,6 +246,9 @@ class User(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Single-use password-reset / set-password link: store only the token's SHA-256 digest.
+    reset_token_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    reset_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class SyncLog(Base):

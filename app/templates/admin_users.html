@@ -12,7 +12,7 @@
     <td><span class="chip {{ 'c-info' if r.u.role=='admin' else 'c-good' if r.u.role=='internal' else 'c-neutral' }}">{{ r.u.role }}</span></td>
     <td>{{ r.customer }}</td>
     <td class="r num">{{ r.views }}{% if r.custom %} <span class="sub2">(custom)</span>{% endif %}</td>
-    <td>{% if r.u.active %}<span class="chip c-good">active</span>{% else %}<span class="chip c-crit">disabled</span>{% endif %}</td>
+    <td>{% if r.u.active %}<span class="chip c-good">active</span>{% else %}<span class="chip c-crit">disabled</span>{% endif %}{% if not r.u.password_hash %} <span class="chip c-neutral">invite pending</span>{% endif %}</td>
     <td class="r"><a class="link" href="/admin/users/{{ r.u.id }}">Edit</a></td>
   </tr>{% endfor %}</tbody>
 </table></div></div>
