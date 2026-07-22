@@ -16,7 +16,7 @@ from datetime import date, timedelta
 
 from sqlalchemy import select
 
-from .db import Base, SessionLocal, engine
+from .db import Base, SessionLocal, engine, ensure_columns
 from .models import (BillingLine, BillingRun, Customer, InboundShipment, Item,
                      ItemFulfilment, ItemFulfilmentLine, ItemReceipt, ItemReceiptLine,
                      Invoice, InvoiceLine, PoLine, PurchaseOrder, RateCard, RateCardLine,
@@ -170,6 +170,7 @@ def seed_users(db):
 
 def seed():
     Base.metadata.create_all(engine)
+    ensure_columns()   # add columns to a pre-existing db before we query them
     db = SessionLocal()
     try:
         if db.query(Customer).count() > 0:

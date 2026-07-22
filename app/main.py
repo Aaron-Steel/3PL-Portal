@@ -13,40 +13,19 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import inspect, select, text
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import netsuite, perms, service
 from .billing import compute_billing, result_to_run_kwargs
-from .db import Base, SessionLocal, engine, get_db
+from .db import Base, SessionLocal, engine, ensure_columns, get_db
 from .models import (BillingLine, BillingRun, Customer, Invoice, RateCard, RateCardLine, User)
 from .notify import send_reset_email
 from .security import hash_password, hash_token, make_reset_token, sign, unsign, verify_password
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 Base.metadata.create_all(engine)
-
-
-def _ensure_columns():
-    """Tiny idempotent migration (no Alembic): add columns introduced after a DB was first
-    created. create_all() never alters existing tables, so without this the live-SOH
-    `synced_at` column would be missing on the existing SQLite/Postgres dbs. Both engines
-    accept `ALTER TABLE ... ADD COLUMN`; we only add when absent."""
-    additions = {"stock_on_hand": {"synced_at": "TIMESTAMP"},
-                 "item_receipt": {"po_tranid": "VARCHAR"},
-                 "po_line": {"ns_inbound_shipment": "VARCHAR"},
-                 "inbound_shipment": {"expected_date": "DATE"},
-                 "app_user": {"reset_token_hash": "VARCHAR", "reset_expires_at": "TIMESTAMP"}}
-    insp = inspect(engine)
-    with engine.begin() as conn:
-        for table, cols in additions.items():
-            existing = {c["name"] for c in insp.get_columns(table)}
-            for name, ddl in cols.items():
-                if name not in existing:
-                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
-
-
-_ensure_columns()
+ensure_columns()
 
 app = FastAPI(title="Macgear 3PL Portal")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")

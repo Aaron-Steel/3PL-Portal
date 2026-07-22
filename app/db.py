@@ -7,7 +7,7 @@ The ORM models are portable; db/01_schema.sql is the canonical Postgres DDL.
 """
 import os
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -34,3 +34,26 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def ensure_columns():
+    """Tiny idempotent migration (no Alembic): add columns introduced after a DB was first
+    created. create_all() never alters existing tables, so without this newer columns (e.g.
+    the live-SOH `synced_at`, the reset-token columns) would be missing on an existing
+    SQLite/Postgres db. Both engines accept `ALTER TABLE ... ADD COLUMN`; we only add when
+    absent. Lives here (not main.py) so `python -m app.seed` runs it BEFORE any query — the
+    seed starts before the app imports, so migrating in main.py alone would crash the seed."""
+    additions = {"stock_on_hand": {"synced_at": "TIMESTAMP"},
+                 "item_receipt": {"po_tranid": "VARCHAR"},
+                 "po_line": {"ns_inbound_shipment": "VARCHAR"},
+                 "inbound_shipment": {"expected_date": "DATE"},
+                 "app_user": {"reset_token_hash": "VARCHAR", "reset_expires_at": "TIMESTAMP"}}
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        for table, cols in additions.items():
+            if not insp.has_table(table):
+                continue
+            existing = {c["name"] for c in insp.get_columns(table)}
+            for name, ddl in cols.items():
+                if name not in existing:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
