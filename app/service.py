@@ -184,7 +184,10 @@ def nav_counts(db: Session, customer_id: int, imap: dict) -> dict:
         "stock_on_order": len({r["tranid"] for r in stock_on_order(db, customer_id, imap)}),
         "item_receipts": db.scalar(select(func.count()).select_from(ItemReceipt)
                                    .where(ItemReceipt.customer_id == customer_id)),
-        "stock_on_hand": len(imap),
+        # SKUs actually on hand (latest snapshot, qty>0) — NOT len(imap): the item master now
+        # holds the customer's whole brand catalog (class-scoped, location-agnostic), so len(imap)
+        # would show the full range (e.g. 305 MOVA SKUs) even with zero 3PL stock on hand.
+        "stock_on_hand": len(stock_on_hand(db, customer_id, imap)),
         "fulfilments": db.scalar(select(func.count()).select_from(ItemFulfilment)
                                  .where(ItemFulfilment.customer_id == customer_id)),
         "invoices": db.scalar(select(func.count()).select_from(Invoice)
@@ -233,7 +236,7 @@ def overview(db: Session, customer: Customer, imap: dict) -> dict:
 
     return {
         "brand": customer.brand_label or "", "location": customer.location_label or "",
-        "skus": len(imap),
+        "skus": len(soh),   # SKUs on hand, not the whole brand catalog (see nav_counts)
         "soh_synced_at": soh_synced_at(db, customer.id),
         "units_on_hand": sum(r["qty_on_hand"] for r in soh),
         "pallets": sum(r["pallets"] for r in soh),
